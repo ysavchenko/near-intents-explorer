@@ -1,0 +1,34 @@
+# Render blueprint: one always-on web service (follower + enricher + API in a
+# single Go binary) plus a Postgres instance.
+#
+# Secrets (BASIC_AUTH_PASS, optional NEARDATA_API_KEY) are set in the Render
+# dashboard (sync: false) — never committed.
+services:
+  - type: web
+    name: intents-explorer
+    runtime: docker
+    plan: starter
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: intents-db
+          property: connectionString
+      - key: BASIC_AUTH_USER
+        value: admin
+      - key: BASIC_AUTH_PASS
+        sync: false
+      - key: NEARDATA_URL
+        value: https://mainnet.neardata.xyz
+      - key: NEARDATA_API_KEY
+        sync: false
+      - key: PRICE_VENUES
+        value: hl
+      - key: PORT
+        value: "8080"
+
+databases:
+  - name: intents-db
+    plan: basic-1gb
+    postgresMajorVersion: "16"

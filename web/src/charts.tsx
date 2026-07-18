@@ -1,0 +1,170 @@
+// Chart building blocks per the dataviz method: thin marks, rounded data-ends,
+// recessive hairline grid, hover tooltips, one axis per chart (never dual).
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { fmtUsd, fmtBpsValue } from "./components";
+
+const axisTick = { fill: "var(--text-muted)", fontSize: 11 } as const;
+
+function chartTooltipStyle() {
+  return {
+    contentStyle: {
+      background: "var(--surface-1)",
+      border: "1px solid var(--border)",
+      borderRadius: 6,
+      fontSize: 12,
+      color: "var(--text-primary)",
+    },
+    labelStyle: { color: "var(--text-secondary)" },
+    cursor: { fill: "color-mix(in oklab, var(--text-primary) 6%, transparent)" },
+  } as const;
+}
+
+export type TimePoint = { ts: string; [k: string]: number | string | null };
+
+function fmtTick(iso: string, bucket: "hour" | "day"): string {
+  const d = new Date(iso);
+  if (bucket === "hour") return d.toISOString().slice(11, 16) + "Z";
+  return d.toISOString().slice(5, 10);
+}
+
+// Single-series volume bars over time. One series → no legend; the title
+// names it (dataviz rule).
+export function VolumeBars({
+  data,
+  bucket,
+  height = 220,
+}: {
+  data: TimePoint[];
+  bucket: "hour" | "day";
+  height?: number;
+}) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+        <CartesianGrid stroke="var(--grid)" strokeWidth={1} vertical={false} />
+        <XAxis
+          dataKey="ts"
+          tickFormatter={(v) => fmtTick(v, bucket)}
+          tick={axisTick}
+          axisLine={{ stroke: "var(--baseline)" }}
+          tickLine={false}
+          minTickGap={40}
+        />
+        <YAxis
+          tickFormatter={(v) => fmtUsd(v)}
+          tick={axisTick}
+          axisLine={false}
+          tickLine={false}
+          width={58}
+        />
+        <Tooltip
+          {...chartTooltipStyle()}
+          formatter={(v) => [fmtUsd(Number(v)), "Volume"]}
+          labelFormatter={(v) => new Date(String(v)).toISOString().replace("T", " ").slice(0, 16) + "Z"}
+        />
+        <Bar dataKey="volume_usd" fill="var(--series-1)" radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+// Volume-weighted edge line over time (its own panel — never a second axis on
+// the volume chart).
+export function EdgeLine({
+  data,
+  bucket,
+  height = 180,
+}: {
+  data: TimePoint[];
+  bucket: "hour" | "day";
+  height?: number;
+}) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <LineChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+        <CartesianGrid stroke="var(--grid)" strokeWidth={1} vertical={false} />
+        <XAxis
+          dataKey="ts"
+          tickFormatter={(v) => fmtTick(v, bucket)}
+          tick={axisTick}
+          axisLine={{ stroke: "var(--baseline)" }}
+          tickLine={false}
+          minTickGap={40}
+        />
+        <YAxis
+          tickFormatter={(v) => fmtBpsValue(Number(v))}
+          tick={axisTick}
+          axisLine={false}
+          tickLine={false}
+          width={58}
+        />
+        <Tooltip
+          {...chartTooltipStyle()}
+          formatter={(v) => [`${fmtBpsValue(Number(v))} bps`, "VW edge (HL)"]}
+          labelFormatter={(v) => new Date(String(v)).toISOString().replace("T", " ").slice(0, 16) + "Z"}
+        />
+        <Line
+          dataKey="hl_vw_edge_bps"
+          stroke="var(--series-5)"
+          strokeWidth={2}
+          dot={false}
+          activeDot={{ r: 4 }}
+          connectNulls
+          isAnimationActive={false}
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+// Edge distribution histogram, bucketed client-side from leg edges.
+export function EdgeHistogram({ edges, height = 180 }: { edges: number[]; height?: number }) {
+  if (edges.length === 0) return null;
+  const sorted = [...edges].sort((a, b) => a - b);
+  // Clip the tails so a single outlier doesn't flatten the histogram.
+  const lo = sorted[Math.floor(sorted.length * 0.02)];
+  const hi = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.98))];
+  const span = Math.max(hi - lo, 1e-9);
+  const nBins = Math.min(40, Math.max(10, Math.floor(Math.sqrt(edges.length))));
+  const bins = Array.from({ length: nBins }, (_, i) => ({
+    x: lo + (span * (i + 0.5)) / nBins,
+    label: `${(lo + (span * i) / nBins).toFixed(1)} … ${(lo + (span * (i + 1)) / nBins).toFixed(1)}`,
+    n: 0,
+  }));
+  for (const e of edges) {
+    const idx = Math.min(nBins - 1, Math.max(0, Math.floor(((e - lo) / span) * nBins)));
+    bins[idx].n++;
+  }
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={bins} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+        <CartesianGrid stroke="var(--grid)" strokeWidth={1} vertical={false} />
+        <XAxis
+          dataKey="x"
+          tickFormatter={(v) => Number(v).toFixed(0)}
+          tick={axisTick}
+          axisLine={{ stroke: "var(--baseline)" }}
+          tickLine={false}
+          minTickGap={30}
+        />
+        <YAxis tick={axisTick} axisLine={false} tickLine={false} width={40} />
+        <Tooltip
+          {...chartTooltipStyle()}
+          formatter={(v) => [String(v), "legs"]}
+          labelFormatter={(_, payload) => `${payload?.[0]?.payload?.label ?? ""} bps`}
+        />
+        <Bar dataKey="n" fill="var(--series-1)" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
