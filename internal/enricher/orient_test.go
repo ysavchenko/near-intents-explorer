@@ -93,11 +93,13 @@ func TestEdgeMatchesSampleRows(t *testing.T) {
 }
 
 const (
-	usdtEth = "nep141:eth-0xdac17f958d2ee523a2206206994597c13d831ec7.omft.near"
-	usdcEth = "nep141:eth-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.omft.near"
-	usdtBsc = "nep245:v2_1.omni.hot.tg:56_2CMMyVTGZkeyNZTSvS5sarzfir6g"
-	ltc     = "nep141:ltc.omft.near"
-	xlm     = "nep245:v2_1.omni.hot.tg:1100_111bzQBB5v7AhLyPMDwS8uJgQV24KaAPXtwyVWu2KXbbfQU6NXRCz"
+	usdtEth  = "nep141:eth-0xdac17f958d2ee523a2206206994597c13d831ec7.omft.near"
+	usdcEth  = "nep141:eth-0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48.omft.near"
+	usdtBsc  = "nep245:v2_1.omni.hot.tg:56_2CMMyVTGZkeyNZTSvS5sarzfir6g"
+	usdt0Arb = "nep141:arb-0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9.omft.near"
+	daiEth   = "nep141:eth-0x6b175474e89094c44da98b954eedeac495271d0f.omft.near"
+	ltc      = "nep141:ltc.omft.near"
+	xlm      = "nep245:v2_1.omni.hot.tg:1100_111bzQBB5v7AhLyPMDwS8uJgQV24KaAPXtwyVWu2KXbbfQU6NXRCz"
 )
 
 func TestOrientLegInteresting(t *testing.T) {
@@ -162,6 +164,80 @@ func TestOrientLegPar(t *testing.T) {
 	e := Edge(native, f64(1.0), o.Side)
 	if e == nil || *e <= 0 {
 		t.Errorf("par edge should be positive: %v", e)
+	}
+}
+
+func TestCrossPairDetectionAndRate(t *testing.T) {
+	reg := testRegistry(t)
+	// USDC received, USDT given: base=USDT (given), quote=USDC. The fair rate
+	// is USDC-per-USDT = 1/p where p = USDT per USDC (Binance USDCUSDT mid).
+	o, term := orientLeg(reg, legInput{
+		LegClass: "stable_stable", FromAsset: usdcEth, ToAsset: usdtEth,
+		AmountIn: dec("21.013484"), AmountOut: dec("21.020725805751890000"),
+	})
+	if term || !o.Par || !o.CrossPair {
+		t.Fatalf("USDC<->USDT must be a cross par leg: %+v", o)
+	}
+	p := 1.0006 // USDC premium of ~6 bps
+	if got := o.CrossRate(p); math.Abs(got-1/1.0006) > 1e-12 {
+		t.Errorf("USDT-base cross rate: got %v want %v", got, 1/1.0006)
+	}
+	// With the real cross the solver's edge turns positive: it gave 1.00034
+	// USDT per USDC received while fair is 1.0006.
+	native, _ := o.QuoteAmt.Div(o.BaseAmt).Float64()
+	rate := o.CrossRate(p)
+	e := Edge(native, &rate, o.Side)
+	if e == nil || *e <= 0 || *e > 10 {
+		t.Errorf("cross-corrected edge should be small positive: %v", e)
+	}
+	// Old 1.0 benchmark called the same leg negative — the mispricing we fix.
+	one := 1.0
+	if old := Edge(native, &one, o.Side); old == nil || *old >= 0 {
+		t.Errorf("sanity: 1.0 benchmark should be negative here: %v", old)
+	}
+
+	// Reverse direction: USDT received, USDC given -> base=USDC, rate = p.
+	o2, term := orientLeg(reg, legInput{
+		LegClass: "stable_stable", FromAsset: usdtEth, ToAsset: usdcEth,
+		AmountIn: dec("100.01"), AmountOut: dec("100"),
+	})
+	if term || !o2.CrossPair {
+		t.Fatalf("reverse cross: %+v", o2)
+	}
+	if got := o2.CrossRate(p); got != p {
+		t.Errorf("USDC-base cross rate: got %v want %v", got, p)
+	}
+}
+
+func TestStableFamily(t *testing.T) {
+	if stableFamily("USDT0") != "USDT" || stableFamily("USDT") != "USDT" ||
+		stableFamily("USDC") != "USDC" || stableFamily("DAI") != "DAI" {
+		t.Error("stableFamily mapping wrong")
+	}
+	reg := testRegistry(t)
+	// USDT<->DAI stays a plain 1.0 par leg (no liquid managed cross wired up).
+	o, term := orientLeg(reg, legInput{
+		LegClass: "stable_stable", FromAsset: usdtEth, ToAsset: daiEth,
+		AmountIn: dec("1"), AmountOut: dec("1"),
+	})
+	if term || o.CrossPair {
+		t.Errorf("USDT<->DAI must not be a cross pair: %+v", o)
+	}
+	// USDT0 (omnichain USDT) <-> USDC uses the cross via the family mapping.
+	o, term = orientLeg(reg, legInput{
+		LegClass: "stable_stable", FromAsset: usdt0Arb, ToAsset: usdcEth,
+		AmountIn: dec("1"), AmountOut: dec("1"),
+	})
+	if term || !o.CrossPair {
+		t.Errorf("USDT0<->USDC must be a cross pair: %+v", o)
+	}
+	// USDT0 <-> USDT is the same family: plain 1.0 par.
+	o, term = orientLeg(reg, legInput{
+		LegClass: "stable_stable", FromAsset: usdt0Arb, ToAsset: usdtEth,
+		AmountIn: dec("1"), AmountOut: dec("1"),
+	})
+	if term || o.CrossPair {
+		t.Errorf("USDT0<->USDT must not be a cross pair: %+v", o)
 	}
 }
 

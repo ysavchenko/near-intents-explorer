@@ -92,6 +92,11 @@ type markKey struct {
 	symbol string // venue spelling (ZECUSDT / ZEC)
 }
 
+// crossMark is the Binance USDCUSDT minute mid (USDT per USDC) — the fair-rate
+// reference for USDT<->USDC par legs. Fetched even when binance is not an
+// enabled venue for regular legs.
+var crossMark = markKey{venue: "binance", symbol: "USDCUSDT"}
+
 // Tick prices one batch of pending legs; returns how many rows it examined.
 func (e *Enricher) Tick(ctx context.Context) (int, error) {
 	e.init()
@@ -141,6 +146,14 @@ func (e *Enricher) Tick(ctx context.Context) (int, error) {
 				needed[k][m] = true
 			}
 		}
+		if o.CrossPair {
+			// USDT<->USDC fair rate comes from the Binance cross regardless of
+			// which venues are enabled for regular legs.
+			if needed[crossMark] == nil {
+				needed[crossMark] = map[int64]bool{}
+			}
+			needed[crossMark][m] = true
+		}
 		pending = append(pending, w)
 	}
 
@@ -184,6 +197,11 @@ func (e *Enricher) Tick(ctx context.Context) (int, error) {
 				}
 			}
 		}
+		if w.o.CrossPair {
+			if _, known := marks[crossMark][w.m]; !known {
+				ready = false
+			}
+		}
 		if !ready {
 			continue // next tick
 		}
@@ -195,8 +213,15 @@ func (e *Enricher) Tick(ctx context.Context) (int, error) {
 		rates := map[string]*float64{}
 		for _, venue := range e.Venues {
 			if w.o.Par {
-				one := 1.0
-				rates[venue] = &one
+				// Par fair rate: 1.0, except the USDT<->USDC cross, which uses
+				// the live Binance mid (falls back to 1.0 on a candle gap).
+				r := 1.0
+				if w.o.CrossPair {
+					if p := marks[crossMark][w.m]; p != nil && *p != 0 {
+						r = w.o.CrossRate(*p)
+					}
+				}
+				rates[venue] = &r
 				continue
 			}
 			ub, _ := usd(venue, w.o.Base, w.m)

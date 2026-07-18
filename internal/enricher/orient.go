@@ -75,7 +75,8 @@ func MinuteMs(ts time.Time) int64 {
 
 // Oriented is a leg prepared for pricing.
 type Oriented struct {
-	Par         bool // same-asset / stable<->stable leg benchmarked against 1.0
+	Par         bool // same-asset / stable<->stable leg benchmarked against a par fair rate
+	CrossPair   bool // par leg between the USDT and USDC families: fair rate is the live cross, not 1.0
 	FromBase    string
 	ToBase      string
 	Base, Quote string
@@ -84,6 +85,25 @@ type Oriented struct {
 	Side        string // buy_base | sell_base
 	BaseAmt     decimal.Decimal
 	QuoteAmt    decimal.Decimal
+}
+
+// stableFamily collapses wrapped variants of the same stable onto one family
+// so the USDT<->USDC cross detection sees through bridges (USDT0 is Tether's
+// omnichain USDT).
+func stableFamily(sym string) string {
+	if sym == "USDT0" {
+		return "USDT"
+	}
+	return sym
+}
+
+// CrossRate converts the Binance USDCUSDT mid (USDT per USDC) into this leg's
+// quote-per-base fair rate. Only meaningful when CrossPair is set.
+func (o *Oriented) CrossRate(usdtPerUsdc float64) float64 {
+	if stableFamily(o.Quote) == "USDT" { // base family is USDC
+		return usdtPerUsdc
+	}
+	return 1 / usdtPerUsdc // base family is USDT, quote is USDC
 }
 
 // legInput is the slice of a legs row that orientation needs.
@@ -127,16 +147,22 @@ func orientLeg(reg *assets.Registry, l legInput) (o *Oriented, terminal bool) {
 		}
 		return o, false
 	case "same_asset", "stable_stable":
-		// Par trade: same dollar (stable<->stable) or same token (wrap/bridge),
-		// so the fair rate is 1.0 on any venue. base = given side, quote =
-		// received side, side = sell_base, so edge = recv/give - 1: > 0 when
-		// the solver received more than it gave (kept the spread).
+		// Par trade: same token (wrap/bridge) or stable<->stable. base = given
+		// side, quote = received side, side = sell_base, so edge = native/fair
+		// - 1: > 0 when the solver kept a spread over the fair rate. The fair
+		// rate is 1.0 — except for USDT<->USDC, which persistently trades off
+		// par (USDC premium averaged +9 bps over the 30 days to 2026-07-18,
+		// ranging +4.5..+26.5), so those legs are benchmarked against the live
+		// Binance USDCUSDT minute mid instead of a hardcoded constant.
 		if fb == "" || tb == "" || l.AmountIn == nil || l.AmountOut == nil ||
 			l.AmountIn.IsZero() || l.AmountOut.IsZero() {
 			return nil, true
 		}
+		famRecv, famGive := stableFamily(fb), stableFamily(tb)
+		cross := (famRecv == "USDT" && famGive == "USDC") ||
+			(famRecv == "USDC" && famGive == "USDT")
 		return &Oriented{
-			Par:      true,
+			Par: true, CrossPair: cross,
 			FromBase: fb, ToBase: tb, Base: tb, Quote: fb,
 			Pair: fb + "/" + tb, BaseAssetID: l.ToAsset,
 			BaseAmt: *l.AmountOut, QuoteAmt: *l.AmountIn,
