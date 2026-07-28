@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiGet, rangeParams, type AggRow, type Summary } from "../api";
-import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, Spinner, StatTile, useRange } from "../components";
+import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, Spinner, StatTile, UsdDelta, useRange } from "../components";
 import { VolumeBars } from "../charts";
 
 export default function Overview() {
@@ -45,6 +45,12 @@ export default function Overview() {
     },
     { key: "n", label: "legs", value: (r: AggRow) => fmtNum(r.n_legs), sortVal: (r: AggRow) => r.n_legs },
     { key: "vol", label: "volume", value: (r: AggRow) => fmtUsd(r.volume_usd), sortVal: (r: AggRow) => r.volume_usd },
+    {
+      key: "fees",
+      label: "fees (HL)",
+      value: (r: AggRow) => <UsdDelta v={r.hl_fees_usd} />,
+      sortVal: (r: AggRow) => r.hl_fees_usd ?? -1e9,
+    },
     {
       key: "vw",
       label: "vw edge (HL)",

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiGet, rangeParams, type AggRow } from "../api";
-import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, Spinner, useRange } from "../components";
+import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, Spinner, UsdDelta, useRange } from "../components";
 
 export function ParFilter({ par, setPar }: { par: string; setPar: (p: string) => void }) {
   const opts = [
@@ -47,6 +47,12 @@ export const aggTableCols = (linkPair: boolean, solver?: string) => [
   },
   { key: "n", label: "legs", value: (r: AggRow) => fmtNum(r.n_legs), sortVal: (r: AggRow) => r.n_legs },
   { key: "vol", label: "volume", value: (r: AggRow) => fmtUsd(r.volume_usd), sortVal: (r: AggRow) => r.volume_usd },
+  {
+    key: "fees",
+    label: "fees (HL)",
+    value: (r: AggRow) => <UsdDelta v={r.hl_fees_usd} />,
+    sortVal: (r: AggRow) => r.hl_fees_usd ?? -1e9,
+  },
   { key: "hn", label: "HL n", value: (r: AggRow) => fmtNum(r.hl_n), sortVal: (r: AggRow) => r.hl_n },
   {
     key: "hvw",

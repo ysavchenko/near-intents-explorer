@@ -52,6 +52,7 @@ type vwStats struct {
 	Volume  float64  `json:"volume_usd"`
 	VWBps   *float64 `json:"vw_bps"`
 	MeanBps *float64 `json:"mean_bps"`
+	FeesUSD float64  `json:"fees_usd"` // sum(bps * notional / 1e4)
 }
 
 func vw(legs []saLeg) vwStats {
@@ -62,6 +63,7 @@ func vw(legs []saLeg) vwStats {
 		wsum += l.Bps * l.Notional
 		bsum += l.Bps
 	}
+	s.FeesUSD = wsum / 1e4
 	if s.Volume > 0 {
 		v := wsum / s.Volume
 		s.VWBps = &v

@@ -12,9 +12,11 @@ export type AggRow = {
   binance_n: number;
   binance_vw_edge_bps: number | null;
   binance_mean_edge_bps: number | null;
+  binance_fees_usd: number | null;
   hl_n: number;
   hl_vw_edge_bps: number | null;
   hl_mean_edge_bps: number | null;
+  hl_fees_usd: number | null;
 };
 
 export type Leg = {
@@ -76,6 +78,7 @@ export type VwStats = {
   volume_usd: number;
   vw_bps: number | null;
   mean_bps: number | null;
+  fees_usd: number;
 };
 
 export type SameAsset = {

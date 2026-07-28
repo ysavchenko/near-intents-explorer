@@ -49,6 +49,16 @@ export function Bps({ v }: { v: number | null | undefined }) {
   return <span style={{ color }}>{fmtBpsValue(v)}</span>;
 }
 
+// Signed USD amount (fees kept vs the venue mid), colored like Bps. Small
+// amounts keep cents — a table full of $0 would hide most fee rows.
+export function UsdDelta({ v }: { v: number | null | undefined }) {
+  if (v == null) return <span style={{ color: "var(--text-muted)" }}>–</span>;
+  const a = Math.abs(v);
+  const mag = a < 100 ? `$${a.toFixed(2)}` : fmtUsd(a);
+  const color = v >= 0 ? "var(--delta-good)" : "var(--delta-bad)";
+  return <span style={{ color }}>{(v >= 0 ? "+" : "−") + mag}</span>;
+}
+
 export function fmtTime(iso: string): string {
   const d = new Date(iso);
   return d.toISOString().replace("T", " ").slice(0, 19) + "Z";

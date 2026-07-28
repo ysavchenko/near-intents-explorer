@@ -129,11 +129,14 @@ type aggRow struct {
 	BinanceN           int64             `json:"binance_n"`
 	BinanceVWEdgeBps   *float64          `json:"binance_vw_edge_bps"`
 	BinanceMeanEdgeBps *float64          `json:"binance_mean_edge_bps"`
+	BinanceFeesUSD     *float64          `json:"binance_fees_usd"`
 	HlN                int64             `json:"hl_n"`
 	HlVWEdgeBps        *float64          `json:"hl_vw_edge_bps"`
 	HlMeanEdgeBps      *float64          `json:"hl_mean_edge_bps"`
+	HlFeesUSD          *float64          `json:"hl_fees_usd"`
 }
 
+// fees = sum(edge_bps * notional / 1e4): the USD the solvers kept vs the venue mid.
 const aggCols = `
 	count(*) AS n_legs,
 	COALESCE(sum(notional_usd), 0) AS volume_usd,
@@ -141,10 +144,12 @@ const aggCols = `
 	sum(edge_bps_binance * notional_usd) FILTER (WHERE edge_bps_binance IS NOT NULL AND notional_usd IS NOT NULL)
 	  / NULLIF(sum(notional_usd) FILTER (WHERE edge_bps_binance IS NOT NULL AND notional_usd IS NOT NULL), 0) AS binance_vw,
 	avg(edge_bps_binance) AS binance_mean,
+	sum(edge_bps_binance * notional_usd / 1e4) FILTER (WHERE edge_bps_binance IS NOT NULL AND notional_usd IS NOT NULL) AS binance_fees,
 	count(edge_bps_hl) AS hl_n,
 	sum(edge_bps_hl * notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL)
 	  / NULLIF(sum(notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL), 0) AS hl_vw,
-	avg(edge_bps_hl) AS hl_mean`
+	avg(edge_bps_hl) AS hl_mean,
+	sum(edge_bps_hl * notional_usd / 1e4) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL) AS hl_fees`
 
 // runAgg executes an aggregate query grouped by keyCols (column names).
 func (s *Server) runAgg(r *http.Request, f *legFilters, keyCols ...string) ([]map[string]any, error) {
@@ -174,21 +179,22 @@ func (s *Server) runAgg(r *http.Request, f *legFilters, keyCols ...string) ([]ma
 	for rows.Next() {
 		keys := make([]*string, len(keyCols))
 		var a aggRow
-		dest := make([]any, 0, len(keyCols)+8)
+		dest := make([]any, 0, len(keyCols)+10)
 		for i := range keys {
 			dest = append(dest, &keys[i])
 		}
 		dest = append(dest, &a.NLegs, &a.VolumeUSD,
-			&a.BinanceN, &a.BinanceVWEdgeBps, &a.BinanceMeanEdgeBps,
-			&a.HlN, &a.HlVWEdgeBps, &a.HlMeanEdgeBps)
+			&a.BinanceN, &a.BinanceVWEdgeBps, &a.BinanceMeanEdgeBps, &a.BinanceFeesUSD,
+			&a.HlN, &a.HlVWEdgeBps, &a.HlMeanEdgeBps, &a.HlFeesUSD)
 		if err := rows.Scan(dest...); err != nil {
 			return nil, err
 		}
 		row := map[string]any{
 			"n_legs": a.NLegs, "volume_usd": a.VolumeUSD,
 			"binance_n": a.BinanceN, "binance_vw_edge_bps": a.BinanceVWEdgeBps,
-			"binance_mean_edge_bps": a.BinanceMeanEdgeBps,
-			"hl_n":                  a.HlN, "hl_vw_edge_bps": a.HlVWEdgeBps, "hl_mean_edge_bps": a.HlMeanEdgeBps,
+			"binance_mean_edge_bps": a.BinanceMeanEdgeBps, "binance_fees_usd": a.BinanceFeesUSD,
+			"hl_n": a.HlN, "hl_vw_edge_bps": a.HlVWEdgeBps, "hl_mean_edge_bps": a.HlMeanEdgeBps,
+			"hl_fees_usd": a.HlFeesUSD,
 		}
 		for i, k := range keyCols {
 			v := ""

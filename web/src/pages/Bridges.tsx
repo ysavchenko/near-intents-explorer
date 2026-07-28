@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet, rangeParams, type SameAsset } from "../api";
-import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, shortHash, Spinner, StatTile, useRange } from "../components";
+import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, shortHash, Spinner, StatTile, UsdDelta, useRange } from "../components";
 
 // Bridges = same-asset legs (e.g. USDT@eth -> USDT@tron) where the solver kept
 // an in/out spread. in_out_diff_bps > 0 means the solver received more than it
@@ -74,6 +74,7 @@ export default function Bridges() {
               { key: "n", label: "legs", value: (r) => fmtNum(r.n), sortVal: (r) => r.n },
               { key: "vol", label: "volume", value: (r) => fmtUsd(r.volume_usd), sortVal: (r) => r.volume_usd },
               { key: "pct", label: "% vol", value: (r) => `${r.pct_vol.toFixed(1)}%`, sortVal: (r) => r.pct_vol },
+              { key: "fees", label: "fees", value: (r) => <UsdDelta v={r.fees_usd} />, sortVal: (r) => r.fees_usd },
               { key: "vw", label: "vw bps", value: (r) => <Bps v={r.vw_bps} />, sortVal: (r) => r.vw_bps ?? -1e9 },
               {
                 key: "mean",
@@ -116,9 +117,11 @@ export default function Bridges() {
               { key: "cp", label: "counterparty", align: "left", value: (r) => r.counterparty, sortVal: (r) => r.counterparty },
               { key: "in_n", label: `into ${d.hub!.chain} n`, value: (r) => fmtNum(r.into.n), sortVal: (r) => r.into.n },
               { key: "in_vol", label: "into vol", value: (r) => fmtUsd(r.into.volume_usd), sortVal: (r) => r.into.volume_usd },
+              { key: "in_fees", label: "into fees", value: (r) => <UsdDelta v={r.into.fees_usd} />, sortVal: (r) => r.into.fees_usd },
               { key: "in_vw", label: "into vw bps", value: (r) => <Bps v={r.into.vw_bps} /> },
               { key: "out_n", label: `out of ${d.hub!.chain} n`, value: (r) => fmtNum(r.out.n), sortVal: (r) => r.out.n },
               { key: "out_vol", label: "out vol", value: (r) => fmtUsd(r.out.volume_usd), sortVal: (r) => r.out.volume_usd },
+              { key: "out_fees", label: "out fees", value: (r) => <UsdDelta v={r.out.fees_usd} />, sortVal: (r) => r.out.fees_usd },
               { key: "out_vw", label: "out vw bps", value: (r) => <Bps v={r.out.vw_bps} /> },
             ]}
             rows={d.hub.rows}
@@ -143,6 +146,7 @@ export default function Bridges() {
               { key: "n", label: "legs", value: (r) => fmtNum(r.n), sortVal: (r) => r.n },
               { key: "vol", label: "volume", value: (r) => fmtUsd(r.volume_usd), sortVal: (r) => r.volume_usd },
               { key: "pct", label: "% vol", value: (r) => `${r.pct_vol.toFixed(1)}%` },
+              { key: "fees", label: "fees", value: (r) => <UsdDelta v={r.fees_usd} /> },
               { key: "vw", label: "vw bps", value: (r) => <Bps v={r.vw_bps} /> },
               { key: "avg", label: "avg size", value: (r) => fmtUsd(r.avg_size_usd) },
             ]}
@@ -165,6 +169,7 @@ export default function Bridges() {
               },
               { key: "n", label: "legs", value: (r) => fmtNum(r.n), sortVal: (r) => r.n },
               { key: "vol", label: "volume", value: (r) => fmtUsd(r.volume_usd), sortVal: (r) => r.volume_usd },
+              { key: "fees", label: "fees", value: (r) => <UsdDelta v={r.fees_usd} />, sortVal: (r) => r.fees_usd },
               { key: "vw", label: "vw bps", value: (r) => <Bps v={r.vw_bps} />, sortVal: (r) => r.vw_bps ?? -1e9 },
               { key: "mean", label: "mean bps", value: (r) => <Bps v={r.mean_bps} /> },
             ]}

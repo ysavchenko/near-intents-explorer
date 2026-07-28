@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiGet, rangeParams, type AggRow } from "../api";
-import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, Spinner, useRange } from "../components";
+import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, Spinner, UsdDelta, useRange } from "../components";
 import { ParFilter } from "./Pairs";
 
 export default function Solvers() {
@@ -35,6 +35,12 @@ export default function Solvers() {
             },
             { key: "n", label: "legs", value: (r) => fmtNum(r.n_legs), sortVal: (r) => r.n_legs },
             { key: "vol", label: "volume", value: (r) => fmtUsd(r.volume_usd), sortVal: (r) => r.volume_usd },
+            {
+              key: "fees",
+              label: "fees (HL)",
+              value: (r) => <UsdDelta v={r.hl_fees_usd} />,
+              sortVal: (r) => r.hl_fees_usd ?? -1e9,
+            },
             { key: "hn", label: "HL n", value: (r) => fmtNum(r.hl_n), sortVal: (r) => r.hl_n },
             {
               key: "hvw",
