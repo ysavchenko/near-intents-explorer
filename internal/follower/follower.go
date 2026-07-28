@@ -70,15 +70,16 @@ type pendingSettlement struct {
 }
 
 type signedMsgJSON struct {
-	Signer     string        `json:"signer"`
-	Kinds      []string      `json:"kinds"`
-	TokenDiffs [][][2]string `json:"token_diffs"` // [ [ [asset, amount], ... ], ... ]
+	Signer      string        `json:"signer"`
+	Kinds       []string      `json:"kinds"`
+	TokenDiffs  [][][2]string `json:"token_diffs"` // [ [ [asset, amount], ... ], ... ]
+	HasReferral bool          `json:"has_referral,omitempty"`
 }
 
 func msgsToJSON(msgs []intents.SignedMsg) []signedMsgJSON {
 	out := make([]signedMsgJSON, len(msgs))
 	for i, m := range msgs {
-		j := signedMsgJSON{Signer: m.Signer, Kinds: m.Kinds}
+		j := signedMsgJSON{Signer: m.Signer, Kinds: m.Kinds, HasReferral: m.HasReferral}
 		for _, d := range m.TokenDiffs {
 			var entries [][2]string
 			for _, e := range d {
@@ -94,7 +95,7 @@ func msgsToJSON(msgs []intents.SignedMsg) []signedMsgJSON {
 func msgsFromJSON(js []signedMsgJSON) ([]intents.SignedMsg, error) {
 	out := make([]intents.SignedMsg, len(js))
 	for i, j := range js {
-		m := intents.SignedMsg{Signer: j.Signer, Kinds: j.Kinds}
+		m := intents.SignedMsg{Signer: j.Signer, Kinds: j.Kinds, HasReferral: j.HasReferral}
 		for _, d := range j.TokenDiffs {
 			var entries []intents.DiffEntry
 			for _, e := range d {
@@ -340,11 +341,12 @@ func (f *Follower) writeSettlement(ctx context.Context, tx pgx.Tx, r resolution)
 	if err != nil {
 		return err
 	}
-	// Mirror the oracle's call order: observe signers BEFORE classifying, so a
-	// settlement counts toward its own signers' frequency promotion.
+	// Observe signers BEFORE classifying, so a settlement counts toward its own
+	// signers' frequency promotion. Taker-marked signers (withdrawal/referral)
+	// are ordinary users — they never count toward solver promotion.
 	signers := map[string]bool{}
 	for i := range msgs {
-		if msgs[i].HasTokenDiff() {
+		if msgs[i].HasTokenDiff() && !msgs[i].TakerMarked() {
 			signers[msgs[i].Signer] = true
 		}
 	}

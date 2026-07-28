@@ -1,7 +1,8 @@
 // Package intents parses `execute_intents` settlements into individual solver
-// swap legs. It is a line-for-line port of the verified Python oracle
-// (handoff/reference/lib/settle.py) — semantics must stay identical so results
-// diff cleanly against it; any divergence is a bug here until proven otherwise.
+// swap legs. Parsing mechanics (payload decoding, diff ordering, dominant-pair
+// selection) mirror the Python reference (handoff/reference/lib/settle.py) and
+// are guarded by golden fixtures. Signer role classification deliberately
+// diverges from the reference — see ClassifySigners.
 //
 // The unit of analysis is one token_diff intent = one swap leg, from the
 // solver's side. We do NOT net by account: a solver that routes WNEAR->USDT
@@ -38,9 +39,10 @@ type DiffEntry struct {
 
 // SignedMsg is one signer's signed message within a settlement.
 type SignedMsg struct {
-	Signer     string
-	Kinds      []string
-	TokenDiffs [][]DiffEntry // one per token_diff intent (zero entries dropped)
+	Signer      string
+	Kinds       []string
+	TokenDiffs  [][]DiffEntry // one per token_diff intent (zero entries dropped)
+	HasReferral bool          // any intent carried a `referral` (aggregator-routed user flow)
 }
 
 func (m *SignedMsg) HasWithdrawal() bool {
@@ -53,6 +55,11 @@ func (m *SignedMsg) HasWithdrawal() bool {
 }
 
 func (m *SignedMsg) HasTokenDiff() bool { return len(m.TokenDiffs) > 0 }
+
+// TakerMarked reports whether the message carries a structural taker signal:
+// the signer withdraws funds out of intents, or its intents carry a referral
+// tag (set by aggregators on user-originated flow, never by solvers).
+func (m *SignedMsg) TakerMarked() bool { return m.HasWithdrawal() || m.HasReferral }
 
 // SwapLeg is one token_diff from the solver's perspective: the dominant
 // positive entry is what the solver receives, the dominant negative what it
@@ -85,8 +92,9 @@ func messageToSigned(raw []byte) SignedMsg {
 	}
 	for _, it := range msg.Intents {
 		var intent struct {
-			Intent string          `json:"intent"`
-			Diff   json.RawMessage `json:"diff"`
+			Intent   string          `json:"intent"`
+			Diff     json.RawMessage `json:"diff"`
+			Referral string          `json:"referral"`
 		}
 		if err := json.Unmarshal(it, &intent); err != nil {
 			continue
@@ -96,6 +104,9 @@ func messageToSigned(raw []byte) SignedMsg {
 			kind = "?"
 		}
 		out.Kinds = append(out.Kinds, kind)
+		if intent.Referral != "" {
+			out.HasReferral = true
+		}
 		if intent.Intent == "token_diff" {
 			d, err := parseDiff(intent.Diff)
 			if err != nil {
@@ -241,35 +252,42 @@ func HasSettlement(actions []json.RawMessage) bool {
 // --------------------------------------------------------------------------
 
 // ClassifySigners maps each token_diff signer to a role: solver | user |
-// unknown (mirrors settle.py::classify_signers).
+// unknown.
 //
-// Primary: known professional makers (seed set) — when present, every other
-// token_diff signer is a taker even if it recurs. Fallbacks: frequency-promoted
-// accounts, then the withdrawal heuristic (the withdrawer is the user). If no
-// signal fires, roles are unknown (surfaced, not guessed).
+// Signals, combined rather than tiered:
+//   - taker markers (TakerMarked: a withdrawal, or a referral-tagged intent)
+//     pin a signer as the user regardless of identity;
+//   - known solvers — the curated seed set plus frequency-promoted accounts —
+//     are solvers when unmarked; everyone else in such a settlement is a user.
+//
+// Without any known solver, the taker markers alone decide (marked = user,
+// rest = solver); with no signal at all, roles are unknown (surfaced, not
+// guessed).
+//
+// This deliberately diverges from the Python reference, which gave the seed
+// set primacy and demoted every co-signer to taker: one settlement can carry
+// several independent solver legs (e.g. a large fill by a learned solver plus
+// seed-solver dust covering a bridge fee), and all of them must be kept.
 func ClassifySigners(msgs []SignedMsg, solvers *SolverSet) map[string]string {
-	signers := map[string]bool{}
-	withdrawers := map[string]bool{}
+	marked := map[string]bool{} // token_diff signer -> taker-marked
 	for i := range msgs {
 		if msgs[i].HasTokenDiff() {
-			signers[msgs[i].Signer] = true
-			if msgs[i].HasWithdrawal() {
-				withdrawers[msgs[i].Signer] = true
-			}
+			marked[msgs[i].Signer] = marked[msgs[i].Signer] || msgs[i].TakerMarked()
 		}
 	}
-	roles := make(map[string]string, len(signers))
+	roles := make(map[string]string, len(marked))
 
-	anySeed := false
-	for s := range signers {
-		if solvers.IsSeed(s) {
-			anySeed = true
+	isKnown := func(s string) bool { return solvers.IsSeed(s) || solvers.IsSolver(s) }
+	anyKnown := false
+	for s, m := range marked {
+		if !m && isKnown(s) {
+			anyKnown = true
 			break
 		}
 	}
-	if anySeed {
-		for s := range signers {
-			if solvers.IsSeed(s) {
+	if anyKnown {
+		for s, m := range marked {
+			if !m && isKnown(s) {
 				roles[s] = "solver"
 			} else {
 				roles[s] = "user"
@@ -278,27 +296,16 @@ func ClassifySigners(msgs []SignedMsg, solvers *SolverSet) map[string]string {
 		return roles
 	}
 
-	anyFreq := false
-	for s := range signers {
-		if solvers.IsSolver(s) {
-			anyFreq = true
+	anyMarked := false
+	for _, m := range marked {
+		if m {
+			anyMarked = true
 			break
 		}
 	}
-	if anyFreq {
-		for s := range signers {
-			if solvers.IsSolver(s) {
-				roles[s] = "solver"
-			} else {
-				roles[s] = "user"
-			}
-		}
-		return roles
-	}
-
-	if len(withdrawers) > 0 {
-		for s := range signers {
-			if withdrawers[s] {
+	if anyMarked {
+		for s, m := range marked {
+			if m {
 				roles[s] = "user"
 			} else {
 				roles[s] = "solver"
@@ -307,7 +314,7 @@ func ClassifySigners(msgs []SignedMsg, solvers *SolverSet) map[string]string {
 		return roles
 	}
 
-	for s := range signers {
+	for s := range marked {
 		roles[s] = "unknown"
 	}
 	return roles

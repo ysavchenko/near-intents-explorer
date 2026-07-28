@@ -144,20 +144,42 @@ func TestUnknownPayloadShapesSkipped(t *testing.T) {
 	}
 }
 
-func TestClassifySignersSeedBeatsFrequency(t *testing.T) {
-	// A known maker present -> every other token_diff signer is a taker, even
-	// a frequency-promoted one.
+func TestClassifySignersSeedAndFrequencyCombine(t *testing.T) {
+	// A seed and a frequency-promoted solver co-signing the same settlement are
+	// BOTH solvers (e.g. a big fill by a learned solver plus seed dust legs);
+	// the unmarked, unknown signer is the user.
+	solvers := NewSolverSet()
+	for i := 0; i < 10; i++ {
+		solvers.Observe(map[string]bool{"learned-solver.near": true})
+	}
+	msgs := []SignedMsg{
+		mustMsg("crux-solver.near", `{"a":"1","b":"-1"}`),
+		mustMsg("learned-solver.near", `{"a":"1","c":"-1"}`),
+		mustMsg("taker.near", `{"a":"-2","b":"1"}`),
+	}
+	roles := ClassifySigners(msgs, solvers)
+	if roles["crux-solver.near"] != "solver" || roles["learned-solver.near"] != "solver" ||
+		roles["taker.near"] != "user" {
+		t.Fatalf("seed and frequency must combine: %v", roles)
+	}
+}
+
+func TestClassifySignersTakerMarkerBeatsIdentity(t *testing.T) {
+	// A referral-tagged (or withdrawing) signer is the user even when its
+	// account is frequency-promoted: taker markers pin the role.
 	solvers := NewSolverSet()
 	for i := 0; i < 10; i++ {
 		solvers.Observe(map[string]bool{"frequent-taker.near": true})
 	}
-	msgs := []SignedMsg{
-		mustMsg("crux-solver.near", `{"a":"1","b":"-1"}`),
-		mustMsg("frequent-taker.near", `{"a":"-1","b":"1"}`),
+	tagged := messageToSigned([]byte(
+		`{"signer_id":"frequent-taker.near","intents":[{"intent":"token_diff","diff":{"a":"-1","b":"1"},"referral":"1click-rango"}]}`))
+	msgs := []SignedMsg{mustMsg("crux-solver.near", `{"a":"1","b":"-1"}`), tagged}
+	if !tagged.TakerMarked() {
+		t.Fatal("referral must mark the message as taker")
 	}
 	roles := ClassifySigners(msgs, solvers)
 	if roles["crux-solver.near"] != "solver" || roles["frequent-taker.near"] != "user" {
-		t.Fatalf("seed must win: %v", roles)
+		t.Fatalf("taker marker must win over promotion: %v", roles)
 	}
 }
 
