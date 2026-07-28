@@ -26,14 +26,18 @@ export function ParFilter({ par, setPar }: { par: string; setPar: (p: string) =>
   );
 }
 
-export const aggTableCols = (linkPair: boolean) => [
+// pairUrl builds a pair-detail link, optionally scoped to one solver.
+export const pairUrl = (pair: string, solver?: string) =>
+  `/pair?p=${encodeURIComponent(pair)}` + (solver ? `&solver=${encodeURIComponent(solver)}` : "");
+
+export const aggTableCols = (linkPair: boolean, solver?: string) => [
   {
     key: "pair",
     label: "pair (recv/give)",
     align: "left" as const,
     value: (r: AggRow) =>
       linkPair ? (
-        <Link to={`/pair?p=${encodeURIComponent(r.pair!)}`} style={{ color: "var(--series-1)" }}>
+        <Link to={pairUrl(r.pair!, solver)} style={{ color: "var(--series-1)" }}>
           {r.pair}
         </Link>
       ) : (
@@ -65,11 +69,11 @@ export const aggTableCols = (linkPair: boolean) => [
 ];
 
 export default function Pairs() {
-  const { hours } = useRange();
+  const { hours, minNotional } = useRange();
   const [par, setPar] = useState("diff");
   const q = useQuery({
-    queryKey: ["pairs", hours, par],
-    queryFn: () => apiGet<{ rows: AggRow[] }>("/api/pairs", { ...rangeParams(hours), par }),
+    queryKey: ["pairs", hours, minNotional, par],
+    queryFn: () => apiGet<{ rows: AggRow[] }>("/api/pairs", { ...rangeParams(hours, minNotional), par }),
   });
   if (q.error) return <ErrorBox error={q.error} />;
   return (

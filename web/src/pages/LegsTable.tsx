@@ -6,10 +6,11 @@ import { EdgeHistogram } from "../charts";
 // Shared "recent legs" section for pair / solver detail pages, with an edge
 // distribution histogram computed from the fetched legs.
 export default function LegsSection({ filter, title }: { filter: Record<string, string>; title: string }) {
-  const { hours } = useRange();
+  const { hours, minNotional } = useRange();
   const q = useQuery({
-    queryKey: ["legs", hours, filter],
-    queryFn: () => apiGet<{ rows: Leg[] }>("/api/legs", { ...rangeParams(hours), limit: "500", ...filter }),
+    queryKey: ["legs", hours, minNotional, filter],
+    queryFn: () =>
+      apiGet<{ rows: Leg[] }>("/api/legs", { ...rangeParams(hours, minNotional), limit: "500", ...filter }),
   });
 
   const legs = q.data?.rows ?? [];

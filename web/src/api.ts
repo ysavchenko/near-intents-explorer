@@ -3,6 +3,10 @@
 export type AggRow = {
   pair?: string;
   solver?: string;
+  from_asset?: string;
+  to_asset?: string;
+  from_label?: string;
+  to_label?: string;
   n_legs: number;
   volume_usd: number;
   binance_n: number;
@@ -148,7 +152,17 @@ export const RANGES = [
   { label: "30d", hours: 720 },
 ] as const;
 
-export function rangeParams(hours: number): Record<string, string> {
+// Global minimum-notional presets (USD). 0 = everything.
+export const AMOUNTS = [
+  { label: "All", min: 0 },
+  { label: "$100+", min: 100 },
+  { label: "$1K+", min: 1000 },
+  { label: "$10K+", min: 10000 },
+] as const;
+
+export function rangeParams(hours: number, minNotional = 0): Record<string, string> {
   const to = Math.ceil(Date.now() / 1000);
-  return { from: String(to - hours * 3600), to: String(to) };
+  const p: Record<string, string> = { from: String(to - hours * 3600), to: String(to) };
+  if (minNotional > 0) p.min_notional = String(minNotional);
+  return p;
 }

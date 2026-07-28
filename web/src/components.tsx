@@ -2,12 +2,19 @@ import { createContext, useContext, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 // ---------------------------------------------------------------------------
-// Time-range context (shared control in the header)
+// Global filter context (shared time-range + min-notional controls in the header)
 // ---------------------------------------------------------------------------
 
-export const RangeContext = createContext<{ hours: number; setHours: (h: number) => void }>({
+export const RangeContext = createContext<{
+  hours: number;
+  setHours: (h: number) => void;
+  minNotional: number;
+  setMinNotional: (v: number) => void;
+}>({
   hours: 24,
   setHours: () => {},
+  minNotional: 0,
+  setMinNotional: () => {},
 });
 
 export function useRange() {

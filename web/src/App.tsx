@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
-import { RANGES } from "./api";
+import { AMOUNTS, RANGES } from "./api";
 import { RangeContext } from "./components";
 import Overview from "./pages/Overview";
 import Pairs from "./pages/Pairs";
@@ -22,8 +22,9 @@ const NAV = [
 
 export default function App() {
   const [hours, setHours] = useState(24);
+  const [minNotional, setMinNotional] = useState(0);
   return (
-    <RangeContext.Provider value={{ hours, setHours }}>
+    <RangeContext.Provider value={{ hours, setHours, minNotional, setMinNotional }}>
       <div className="min-h-screen">
         <header
           className="sticky top-0 z-10 border-b"
@@ -49,6 +50,23 @@ export default function App() {
               ))}
             </nav>
             <div className="flex items-center gap-0.5">
+              {AMOUNTS.map((a) => (
+                <button
+                  key={a.min}
+                  onClick={() => setMinNotional(a.min)}
+                  title="Hide legs below this USD notional (applies everywhere)"
+                  className="rounded px-2 py-1 text-xs"
+                  style={{
+                    background:
+                      minNotional === a.min ? "color-mix(in oklab, var(--series-1) 14%, transparent)" : undefined,
+                    color: minNotional === a.min ? "var(--text-primary)" : "var(--text-muted)",
+                    fontWeight: minNotional === a.min ? 600 : 400,
+                  }}
+                >
+                  {a.label}
+                </button>
+              ))}
+              <span className="mx-1 h-4 w-px" style={{ background: "var(--border)" }} />
               {RANGES.map((r) => (
                 <button
                   key={r.hours}

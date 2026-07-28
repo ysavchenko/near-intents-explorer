@@ -5,10 +5,10 @@ import { ClassBadge, DataTable, ErrorBox, fmtNum, fmtTime, fmtUsd, SectionCard, 
 // Multi-hop routes: a solver's legs within one settlement netted per asset;
 // clean 1-source/1-sink chains synthesize the direct replacement swap.
 export default function MultihopPage() {
-  const { hours } = useRange();
+  const { hours, minNotional } = useRange();
   const q = useQuery({
-    queryKey: ["multihop", hours],
-    queryFn: () => apiGet<Multihop>("/api/routes/multihop", rangeParams(hours)),
+    queryKey: ["multihop", hours, minNotional],
+    queryFn: () => apiGet<Multihop>("/api/routes/multihop", rangeParams(hours, minNotional)),
   });
   if (q.error) return <ErrorBox error={q.error} />;
   const d = q.data;

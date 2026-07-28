@@ -57,6 +57,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/status", s.handleStatus)
 			r.Get("/summary", s.handleSummary)
 			r.Get("/pairs", s.handlePairs)
+			r.Get("/pairs/directions", s.handlePairDirections)
 			r.Get("/solvers", s.handleSolvers)
 			r.Get("/solvers/{id}", s.handleSolverDetail)
 			r.Get("/legs", s.handleLegs)

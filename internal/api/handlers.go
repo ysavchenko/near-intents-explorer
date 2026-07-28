@@ -79,6 +79,19 @@ func (f *legFilters) where() string {
 	return strings.Join(f.conds, " AND ")
 }
 
+// parseMinNotional reads ?min_notional= (USD). 0 = no filter.
+func parseMinNotional(r *http.Request) (float64, error) {
+	mn := r.URL.Query().Get("min_notional")
+	if mn == "" {
+		return 0, nil
+	}
+	v, err := strconv.ParseFloat(mn, 64)
+	if err != nil {
+		return 0, fmt.Errorf("bad min_notional")
+	}
+	return v, nil
+}
+
 func baseFilters(r *http.Request, w window, pricedOnly bool) (*legFilters, error) {
 	f := &legFilters{}
 	f.addf("block_ts >= ?", w.From)
@@ -95,14 +108,12 @@ func baseFilters(r *http.Request, w window, pricedOnly bool) (*legFilters, error
 	default:
 		return nil, fmt.Errorf("par must be diff|all|off")
 	}
-	if mn := r.URL.Query().Get("min_notional"); mn != "" {
-		v, err := strconv.ParseFloat(mn, 64)
-		if err != nil {
-			return nil, fmt.Errorf("bad min_notional")
-		}
-		if v > 0 {
-			f.addf("(notional_usd IS NULL OR notional_usd >= ?)", v)
-		}
+	v, err := parseMinNotional(r)
+	if err != nil {
+		return nil, err
+	}
+	if v > 0 {
+		f.addf("(notional_usd IS NULL OR notional_usd >= ?)", v)
 	}
 	return f, nil
 }
@@ -210,6 +221,43 @@ func (s *Server) handlePairs(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"from": win.From, "to": win.To, "rows": emptyList(rowsOut)})
 }
 
+// handlePairDirections breaks one pair down by concrete asset direction
+// (e.g. USDT/USDT -> USDT@eth->USDT@tron vs USDT@tron->USDT@eth), optionally
+// scoped to a solver.
+func (s *Server) handlePairDirections(w http.ResponseWriter, r *http.Request) {
+	win, err := parseWindow(r)
+	if err != nil {
+		httpErr(w, 400, err)
+		return
+	}
+	pair := r.URL.Query().Get("pair")
+	if pair == "" {
+		httpErr(w, 400, fmt.Errorf("pair required"))
+		return
+	}
+	f, err := baseFilters(r, win, true)
+	if err != nil {
+		httpErr(w, 400, err)
+		return
+	}
+	f.addf("pair = ?", pair)
+	if v := r.URL.Query().Get("solver"); v != "" {
+		f.addf("solver = ?", v)
+	}
+	rowsOut, err := s.runAgg(r, f, "from_asset", "to_asset")
+	if err != nil {
+		httpErr(w, 500, err)
+		return
+	}
+	for _, row := range rowsOut {
+		from, _ := row["from_asset"].(string)
+		to, _ := row["to_asset"].(string)
+		row["from_label"] = s.Registry.Label(from)
+		row["to_label"] = s.Registry.Label(to)
+	}
+	writeJSON(w, map[string]any{"from": win.From, "to": win.To, "pair": pair, "rows": emptyList(rowsOut)})
+}
+
 func (s *Server) handleSolvers(w http.ResponseWriter, r *http.Request) {
 	win, err := parseWindow(r)
 	if err != nil {
@@ -283,11 +331,23 @@ func (s *Server) handleLegs(w http.ResponseWriter, r *http.Request) {
 	if v := r.URL.Query().Get("solver"); v != "" {
 		f.addf("l.solver = ?", v)
 	}
+	if v := r.URL.Query().Get("from_asset"); v != "" {
+		f.addf("l.from_asset = ?", v)
+	}
+	if v := r.URL.Query().Get("to_asset"); v != "" {
+		f.addf("l.to_asset = ?", v)
+	}
 	if v := r.URL.Query().Get("class"); v != "" {
 		f.addf("l.leg_class = ?", v)
 	}
 	if v := r.URL.Query().Get("status"); v != "" {
 		f.addf("l.price_status = ?", v)
+	}
+	if mn, err := parseMinNotional(r); err != nil {
+		httpErr(w, 400, err)
+		return
+	} else if mn > 0 {
+		f.addf("(l.notional_usd IS NULL OR l.notional_usd >= ?)", mn)
 	}
 	limit := clampInt(r.URL.Query().Get("limit"), 200, 1, 1000)
 	offset := clampInt(r.URL.Query().Get("offset"), 0, 0, 1_000_000)
@@ -369,13 +429,25 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 
+	// Legs-based stats honor min_notional; settlement counts are tx-level and
+	// have no USD notional, so they stay window-only.
+	legCond := "block_ts >= $1 AND block_ts < $2"
+	legArgs := []any{win.From, win.To}
+	if mn, err := parseMinNotional(r); err != nil {
+		httpErr(w, 400, err)
+		return
+	} else if mn > 0 {
+		legCond += " AND (notional_usd IS NULL OR notional_usd >= $3)"
+		legArgs = append(legArgs, mn)
+	}
+
 	var volume float64
 	var nLegs, pendingLegs, activeSolvers int64
 	err = s.Pool.QueryRow(ctx, `
 		SELECT COALESCE(sum(notional_usd),0), count(*),
 		       count(*) FILTER (WHERE price_status='pending'),
 		       count(DISTINCT solver)
-		FROM legs WHERE block_ts >= $1 AND block_ts < $2`, win.From, win.To).
+		FROM legs WHERE `+legCond, legArgs...).
 		Scan(&volume, &nLegs, &pendingLegs, &activeSolvers)
 	if err != nil {
 		httpErr(w, 500, err)
@@ -393,7 +465,7 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 
 	classRows, err := s.Pool.Query(ctx, `
 		SELECT leg_class, COALESCE(sum(notional_usd),0), count(*)
-		FROM legs WHERE block_ts >= $1 AND block_ts < $2 GROUP BY 1`, win.From, win.To)
+		FROM legs WHERE `+legCond+` GROUP BY 1`, legArgs...)
 	if err != nil {
 		httpErr(w, 500, err)
 		return
@@ -416,7 +488,7 @@ func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
 
 	hourly, err := s.Pool.Query(ctx, `
 		SELECT date_trunc('hour', block_ts) AS h, COALESCE(sum(notional_usd),0), count(*)
-		FROM legs WHERE block_ts >= $1 AND block_ts < $2 GROUP BY 1 ORDER BY 1`, win.From, win.To)
+		FROM legs WHERE `+legCond+` GROUP BY 1 ORDER BY 1`, legArgs...)
 	if err != nil {
 		httpErr(w, 500, err)
 		return
@@ -468,6 +540,12 @@ func (s *Server) handleDaily(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httpErr(w, 400, err)
 		return
+	}
+	// Optional scoping (column names are a fixed whitelist, values are params).
+	for _, col := range []string{"pair", "solver", "from_asset", "to_asset"} {
+		if v := r.URL.Query().Get(col); v != "" {
+			f.addf(col+" = ?", v)
+		}
 	}
 
 	var q string

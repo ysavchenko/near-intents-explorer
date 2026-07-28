@@ -16,19 +16,24 @@ type SolverResp = {
 
 export default function SolverDetail() {
   const { id = "" } = useParams();
-  const { hours } = useRange();
+  const { hours, minNotional } = useRange();
   const bucket = hours <= 72 ? "hour" : "day";
 
   const q = useQuery({
-    queryKey: ["solver", id, hours],
-    queryFn: () => apiGet<SolverResp>(`/api/solvers/${encodeURIComponent(id)}`, { ...rangeParams(hours), par: "diff" }),
+    queryKey: ["solver", id, hours, minNotional],
+    queryFn: () =>
+      apiGet<SolverResp>(`/api/solvers/${encodeURIComponent(id)}`, {
+        ...rangeParams(hours, minNotional),
+        par: "diff",
+      }),
   });
   const daily = useQuery({
-    queryKey: ["daily-solver", id, hours],
+    queryKey: ["daily-solver", id, hours, minNotional],
     queryFn: () =>
       apiGet<{ rows: DailyPoint[] }>("/api/daily", {
-        ...rangeParams(hours),
-        group: "solver",
+        ...rangeParams(hours, minNotional),
+        group: "none",
+        solver: id,
         bucket,
         par: "all",
       }),
@@ -37,7 +42,7 @@ export default function SolverDetail() {
   if (q.error) return <ErrorBox error={q.error} />;
   if (!q.data) return <Spinner />;
   const s = q.data;
-  const series = (daily.data?.rows ?? []).filter((r) => r.key === id);
+  const series = daily.data?.rows ?? [];
 
   return (
     <>
@@ -57,7 +62,7 @@ export default function SolverDetail() {
         </div>
       </SectionCard>
       <SectionCard title="Pairs (real spreads)">
-        <DataTable cols={aggTableCols(true)} rows={s.pairs} rowKey={(r) => r.pair!} defaultSort="vol" />
+        <DataTable cols={aggTableCols(true, id)} rows={s.pairs} rowKey={(r) => r.pair!} defaultSort="vol" />
       </SectionCard>
       <LegsSection filter={{ solver: id }} title="Legs" />
     </>

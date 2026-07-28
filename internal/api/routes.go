@@ -93,6 +93,11 @@ func (s *Server) handleSameAsset(w http.ResponseWriter, r *http.Request) {
 			symbols[sym] = true
 		}
 	}
+	minNotional, err := parseMinNotional(r)
+	if err != nil {
+		httpErr(w, 400, err)
+		return
+	}
 	f := &legFilters{}
 	f.addf("l.block_ts >= ?", win.From)
 	f.addf("l.block_ts < ?", win.To)
@@ -140,6 +145,9 @@ func (s *Server) handleSameAsset(w http.ResponseWriter, r *http.Request) {
 		} else if fa.PriceUSD != nil {
 			rf, _ := recv.Float64()
 			n = rf * *fa.PriceUSD
+		}
+		if minNotional > 0 && n < minNotional {
+			continue
 		}
 		legs = append(legs, saLeg{
 			Solver: solver, Ts: ts, Tx: tx,

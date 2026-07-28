@@ -5,20 +5,20 @@ import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, Spinner, StatTil
 import { VolumeBars } from "../charts";
 
 export default function Overview() {
-  const { hours } = useRange();
-  const params = rangeParams(hours);
+  const { hours, minNotional } = useRange();
+  const params = rangeParams(hours, minNotional);
 
   const summary = useQuery({
-    queryKey: ["summary", hours],
+    queryKey: ["summary", hours, minNotional],
     queryFn: () => apiGet<Summary>("/api/summary", params),
     refetchInterval: 30_000,
   });
   const pairs = useQuery({
-    queryKey: ["pairs", hours],
+    queryKey: ["pairs", hours, minNotional],
     queryFn: () => apiGet<{ rows: AggRow[] }>("/api/pairs", params),
   });
   const solvers = useQuery({
-    queryKey: ["solvers", hours],
+    queryKey: ["solvers", hours, minNotional],
     queryFn: () => apiGet<{ rows: AggRow[] }>("/api/solvers", params),
   });
 

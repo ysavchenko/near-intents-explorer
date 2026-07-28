@@ -6,11 +6,11 @@ import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, Spinner, useRang
 import { ParFilter } from "./Pairs";
 
 export default function Solvers() {
-  const { hours } = useRange();
+  const { hours, minNotional } = useRange();
   const [par, setPar] = useState("diff");
   const q = useQuery({
-    queryKey: ["solvers", hours, par],
-    queryFn: () => apiGet<{ rows: AggRow[] }>("/api/solvers", { ...rangeParams(hours), par }),
+    queryKey: ["solvers", hours, minNotional, par],
+    queryFn: () => apiGet<{ rows: AggRow[] }>("/api/solvers", { ...rangeParams(hours, minNotional), par }),
   });
   if (q.error) return <ErrorBox error={q.error} />;
   return (

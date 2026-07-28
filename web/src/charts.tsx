@@ -127,22 +127,28 @@ export function EdgeLine({
   );
 }
 
-// Edge distribution histogram, bucketed client-side from leg edges.
+// Edge distribution histogram, bucketed client-side from leg edges. Edges are
+// rounded to the nearest whole bps first: sub-bps bin widths would render
+// several bars that all carry the same label.
 export function EdgeHistogram({ edges, height = 180 }: { edges: number[]; height?: number }) {
   if (edges.length === 0) return null;
-  const sorted = [...edges].sort((a, b) => a - b);
+  const sorted = edges.map((e) => Math.round(e)).sort((a, b) => a - b);
   // Clip the tails so a single outlier doesn't flatten the histogram.
   const lo = sorted[Math.floor(sorted.length * 0.02)];
   const hi = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.98))];
-  const span = Math.max(hi - lo, 1e-9);
-  const nBins = Math.min(40, Math.max(10, Math.floor(Math.sqrt(edges.length))));
-  const bins = Array.from({ length: nBins }, (_, i) => ({
-    x: lo + (span * (i + 0.5)) / nBins,
-    label: `${(lo + (span * i) / nBins).toFixed(1)} … ${(lo + (span * (i + 1)) / nBins).toFixed(1)}`,
-    n: 0,
-  }));
-  for (const e of edges) {
-    const idx = Math.min(nBins - 1, Math.max(0, Math.floor(((e - lo) / span) * nBins)));
+  const maxBins = Math.min(40, Math.max(10, Math.floor(Math.sqrt(sorted.length))));
+  const binW = Math.max(1, Math.ceil((hi - lo + 1) / maxBins)); // whole bps per bin
+  const nBins = Math.max(1, Math.ceil((hi - lo + 1) / binW));
+  const bins = Array.from({ length: nBins }, (_, i) => {
+    const start = lo + i * binW;
+    return {
+      x: start + (binW - 1) / 2,
+      label: binW === 1 ? `${start}` : `${start} … ${start + binW - 1}`,
+      n: 0,
+    };
+  });
+  for (const e of sorted) {
+    const idx = Math.min(nBins - 1, Math.max(0, Math.floor((e - lo) / binW)));
     bins[idx].n++;
   }
   return (

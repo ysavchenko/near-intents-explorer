@@ -7,16 +7,16 @@ import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, shortHash, Spinn
 // an in/out spread. in_out_diff_bps > 0 means the solver received more than it
 // gave.
 export default function Bridges() {
-  const { hours } = useRange();
+  const { hours, minNotional } = useRange();
   const [symbols, setSymbols] = useState("USDT,USDC");
   const [hub, setHub] = useState("");
   const [route, setRoute] = useState("");
 
   const q = useQuery({
-    queryKey: ["same-asset", hours, symbols, hub, route],
+    queryKey: ["same-asset", hours, minNotional, symbols, hub, route],
     queryFn: () =>
       apiGet<SameAsset>("/api/routes/same-asset", {
-        ...rangeParams(hours),
+        ...rangeParams(hours, minNotional),
         symbols,
         hub,
         route,
