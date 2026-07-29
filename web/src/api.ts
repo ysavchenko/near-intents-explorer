@@ -126,6 +126,23 @@ export type Multihop = {
   routes: MultihopRoute[];
 };
 
+export type BalanceRow = {
+  asset_id: string;
+  label: string;
+  balance: string;
+  price_usd: number | null;
+  value_usd: number | null;
+};
+
+export type SolverBalances = {
+  solver: string;
+  contract: string;
+  rows: BalanceRow[];
+  total_usd: number;
+  total_complete: boolean;
+  fetched_at: string;
+};
+
 export type DailyPoint = {
   ts: string;
   key: string;

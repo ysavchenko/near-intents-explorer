@@ -19,6 +19,9 @@ type Config struct {
 	NeardataURL    string
 	NeardataAPIKey string
 
+	// NEAR JSON-RPC endpoint for contract view calls (solver balances).
+	NearRPCURL string
+
 	// HTTP server.
 	Port          int
 	BasicAuthUser string
@@ -39,6 +42,7 @@ func FromEnv() (*Config, error) {
 		DatabaseURL:        os.Getenv("DATABASE_URL"),
 		NeardataURL:        getenv("NEARDATA_URL", "https://mainnet.neardata.xyz"),
 		NeardataAPIKey:     os.Getenv("NEARDATA_API_KEY"),
+		NearRPCURL:         getenv("NEAR_RPC_URL", "https://free.rpc.fastnear.com"),
 		Port:               getenvInt("PORT", 8080),
 		BasicAuthUser:      getenv("BASIC_AUTH_USER", "admin"),
 		BasicAuthPass:      os.Getenv("BASIC_AUTH_PASS"),

@@ -19,11 +19,13 @@ import (
 	"intents-explorer/internal/intents"
 	"intents-explorer/internal/metrics"
 	"intents-explorer/internal/neardata"
+	"intents-explorer/internal/nearrpc"
 )
 
 type Server struct {
 	Pool     *pgxpool.Pool
 	Client   *neardata.Client
+	RPC      *nearrpc.Client
 	Registry *assets.Registry
 	Solvers  *intents.SolverSet
 	Metrics  *metrics.Metrics
@@ -60,6 +62,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/pairs/directions", s.handlePairDirections)
 			r.Get("/solvers", s.handleSolvers)
 			r.Get("/solvers/{id}", s.handleSolverDetail)
+			r.Get("/solvers/{id}/balances", s.handleSolverBalances)
 			r.Get("/legs", s.handleLegs)
 			r.Get("/daily", s.handleDaily)
 			r.Get("/routes/same-asset", s.handleSameAsset)

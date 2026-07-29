@@ -22,6 +22,7 @@ import (
 	"intents-explorer/internal/intents"
 	"intents-explorer/internal/metrics"
 	"intents-explorer/internal/neardata"
+	"intents-explorer/internal/nearrpc"
 	"intents-explorer/web"
 )
 
@@ -116,7 +117,8 @@ func run(log *slog.Logger) error {
 	}()
 
 	srv := &api.Server{
-		Pool: pool, Client: client, Registry: registry, Solvers: solvers,
+		Pool: pool, Client: client, RPC: nearrpc.New(cfg.NearRPCURL),
+		Registry: registry, Solvers: solvers,
 		Metrics: m, Cfg: cfg, Log: log.With("loop", "api"), UI: web.Handler(),
 	}
 	httpSrv := &http.Server{
