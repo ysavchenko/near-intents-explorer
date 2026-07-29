@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { apiGet, rangeParams, type AggRow, type BalanceRow, type DailyPoint, type SolverBalances } from "../api";
 import { DataTable, ErrorBox, fmtUsd, SectionCard, Spinner, useRange } from "../components";
-import { VolumeBars } from "../charts";
+import { fillBuckets, VolumeBars } from "../charts";
 import { aggTableCols } from "./Pairs";
 import LegsSection from "./LegsTable";
 
@@ -94,7 +94,7 @@ export default function SolverDetail() {
   const daily = useQuery({
     queryKey: ["daily-solver", id, hours, minNotional],
     queryFn: () =>
-      apiGet<{ rows: DailyPoint[] }>("/api/daily", {
+      apiGet<{ from: string; to: string; rows: DailyPoint[] }>("/api/daily", {
         ...rangeParams(hours, minNotional),
         group: "none",
         solver: id,
@@ -106,7 +106,7 @@ export default function SolverDetail() {
   if (q.error) return <ErrorBox error={q.error} />;
   if (!q.data) return <Spinner />;
   const s = q.data;
-  const series = daily.data?.rows ?? [];
+  const series = daily.data ? fillBuckets(daily.data.rows, daily.data.from, daily.data.to, bucket) : [];
 
   return (
     <>

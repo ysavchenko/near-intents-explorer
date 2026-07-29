@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiGet, rangeParams, type AggRow, type Summary } from "../api";
 import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, Spinner, StatTile, UsdDelta, useRange } from "../components";
-import { VolumeBars } from "../charts";
+import { fillBuckets, VolumeBars } from "../charts";
 
 export default function Overview() {
   const { hours, minNotional } = useRange();
@@ -80,7 +80,7 @@ export default function Overview() {
 
       <SectionCard title="Volume by hour (USD)">
         <div className="px-2 pb-2">
-          <VolumeBars data={s.hourly} bucket="hour" />
+          <VolumeBars data={fillBuckets(s.hourly, s.from, s.to, "hour")} bucket="hour" />
         </div>
       </SectionCard>
 

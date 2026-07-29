@@ -31,6 +31,25 @@ function chartTooltipStyle() {
 
 export type TimePoint = { ts: string; [k: string]: number | string | null };
 
+// Fill missing buckets with zero-volume points so quiet periods render as
+// zero bars instead of being skipped (skipping compresses the time axis and
+// exaggerates activity). Bucket phase is inferred from the data, so day
+// buckets stay aligned with the server's date_trunc timezone.
+export function fillBuckets(rows: TimePoint[], from: string, to: string, bucket: "hour" | "day"): TimePoint[] {
+  const step = bucket === "hour" ? 3_600_000 : 86_400_000;
+  const fromMs = new Date(from).getTime();
+  const toMs = new Date(to).getTime();
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) return rows;
+  const phase = rows.length ? new Date(rows[0].ts).getTime() % step : 0;
+  const align = (t: number) => t - ((((t - phase) % step) + step) % step);
+  const have = new Map(rows.map((r) => [new Date(r.ts).getTime(), r]));
+  const out: TimePoint[] = [];
+  for (let t = align(fromMs); t <= toMs && out.length < 5000; t += step) {
+    out.push(have.get(t) ?? { ts: new Date(t).toISOString(), volume_usd: 0, n_legs: 0, hl_vw_edge_bps: null });
+  }
+  return out;
+}
+
 function fmtTick(iso: string, bucket: "hour" | "day"): string {
   const d = new Date(iso);
   if (bucket === "hour") return d.toISOString().slice(11, 16) + "Z";

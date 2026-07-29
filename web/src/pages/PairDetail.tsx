@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { apiGet, rangeParams, type AggRow, type DailyPoint } from "../api";
 import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, shortHash, Spinner, UsdDelta, useRange } from "../components";
-import { EdgeLine, VolumeBars } from "../charts";
+import { EdgeLine, fillBuckets, VolumeBars } from "../charts";
 import LegsSection from "./LegsTable";
 
 // Pair detail, optionally scoped to one solver (?solver=) and/or one concrete
@@ -24,7 +24,7 @@ export default function PairDetail() {
   const daily = useQuery({
     queryKey: ["daily-pair", scope, hours, minNotional],
     queryFn: () =>
-      apiGet<{ rows: DailyPoint[] }>("/api/daily", {
+      apiGet<{ from: string; to: string; rows: DailyPoint[] }>("/api/daily", {
         ...rangeParams(hours, minNotional),
         group: "none",
         bucket,
@@ -48,7 +48,7 @@ export default function PairDetail() {
   if (!pair) return <ErrorBox error="no pair given" />;
   if (daily.error) return <ErrorBox error={daily.error} />;
 
-  const series = daily.data?.rows ?? [];
+  const series = daily.data ? fillBuckets(daily.data.rows, daily.data.from, daily.data.to, bucket) : [];
   const dirUrl = (r: AggRow) =>
     `/pair?p=${encodeURIComponent(pair)}` +
     (solver ? `&solver=${encodeURIComponent(solver)}` : "") +
