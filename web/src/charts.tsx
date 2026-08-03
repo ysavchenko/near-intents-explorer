@@ -152,13 +152,21 @@ export function EdgeLine({
 export function EdgeHistogram({ edges, height = 180 }: { edges: number[]; height?: number }) {
   if (edges.length === 0) return null;
   const sorted = edges.map((e) => Math.round(e)).sort((a, b) => a - b);
-  // Clip the tails so a single outlier doesn't flatten the histogram.
-  const lo = sorted[Math.floor(sorted.length * 0.02)];
-  const hi = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.98))];
+  const q = (p: number) => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
+  // Drop only true outliers (0.5% per tail) — a skewed-but-real tail (e.g.
+  // mostly +1 bps with a cluster at +10) must stay visible. Tighten further
+  // only when the remaining span would flatten every real bar into one bin.
+  let lo = q(0.005);
+  let hi = q(0.995);
+  if (hi - lo > 200) {
+    lo = q(0.02);
+    hi = q(0.98);
+  }
   const maxBins = Math.min(40, Math.max(10, Math.floor(Math.sqrt(sorted.length))));
   const binW = Math.max(1, Math.ceil((hi - lo + 1) / maxBins)); // whole bps per bin
   const nBins = Math.max(1, Math.ceil((hi - lo + 1) / binW));
-  const bins = Array.from({ length: nBins }, (_, i) => {
+  type Bin = { x: number | string; label: string; n: number };
+  const bins: Bin[] = Array.from({ length: nBins }, (_, i) => {
     const start = lo + i * binW;
     return {
       x: start + (binW - 1) / 2,
@@ -166,17 +174,24 @@ export function EdgeHistogram({ edges, height = 180 }: { edges: number[]; height
       n: 0,
     };
   });
+  // Clipped mass gets explicit overflow bars instead of silently inflating
+  // the edge bins under a wrong label.
+  let below = 0;
+  let above = 0;
   for (const e of sorted) {
-    const idx = Math.min(nBins - 1, Math.max(0, Math.floor((e - lo) / binW)));
-    bins[idx].n++;
+    if (e < lo) below++;
+    else if (e > hi) above++;
+    else bins[Math.min(nBins - 1, Math.floor((e - lo) / binW))].n++;
   }
+  if (below > 0) bins.unshift({ x: `≤${lo - 1}`, label: `≤ ${lo - 1}`, n: below });
+  if (above > 0) bins.push({ x: `≥${hi + 1}`, label: `≥ ${hi + 1}`, n: above });
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={bins} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
         <CartesianGrid stroke="var(--grid)" strokeWidth={1} vertical={false} />
         <XAxis
           dataKey="x"
-          tickFormatter={(v) => Number(v).toFixed(0)}
+          tickFormatter={(v) => (Number.isFinite(Number(v)) ? Number(v).toFixed(0) : String(v))}
           tick={axisTick}
           axisLine={{ stroke: "var(--baseline)" }}
           tickLine={false}
