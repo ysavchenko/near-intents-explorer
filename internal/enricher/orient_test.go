@@ -210,10 +210,6 @@ func TestCrossPairDetectionAndRate(t *testing.T) {
 }
 
 func TestStableFamily(t *testing.T) {
-	if stableFamily("USDT0") != "USDT" || stableFamily("USDT") != "USDT" ||
-		stableFamily("USDC") != "USDC" || stableFamily("DAI") != "DAI" {
-		t.Error("stableFamily mapping wrong")
-	}
 	reg := testRegistry(t)
 	// USDT<->DAI stays a plain 1.0 par leg (no liquid managed cross wired up).
 	o, term := orientLeg(reg, legInput{
@@ -223,7 +219,8 @@ func TestStableFamily(t *testing.T) {
 	if term || o.CrossPair {
 		t.Errorf("USDT<->DAI must not be a cross pair: %+v", o)
 	}
-	// USDT0 (omnichain USDT) <-> USDC uses the cross via the family mapping.
+	// USDT0 (Tether's omnichain USDT) collapses onto USDT via BaseSymbol, so
+	// USDT0 <-> USDC uses the cross and prices under the USDT label.
 	o, term = orientLeg(reg, legInput{
 		LegClass: "stable_stable", FromAsset: usdt0Arb, ToAsset: usdcEth,
 		AmountIn: dec("1"), AmountOut: dec("1"),
@@ -231,13 +228,19 @@ func TestStableFamily(t *testing.T) {
 	if term || !o.CrossPair {
 		t.Errorf("USDT0<->USDC must be a cross pair: %+v", o)
 	}
-	// USDT0 <-> USDT is the same family: plain 1.0 par.
+	if o.Pair != "USDT/USDC" {
+		t.Errorf("USDT0 must price under the USDT label: %s", o.Pair)
+	}
+	// USDT0 <-> USDT is the same asset: classified as a bridge leg, plain 1.0 par.
+	if got := reg.ClassifyPair(usdt0Arb, usdtEth); got != "same_asset" {
+		t.Errorf("USDT0<->USDT must classify as same_asset, got %s", got)
+	}
 	o, term = orientLeg(reg, legInput{
-		LegClass: "stable_stable", FromAsset: usdt0Arb, ToAsset: usdtEth,
+		LegClass: "same_asset", FromAsset: usdt0Arb, ToAsset: usdtEth,
 		AmountIn: dec("1"), AmountOut: dec("1"),
 	})
-	if term || o.CrossPair {
-		t.Errorf("USDT0<->USDT must not be a cross pair: %+v", o)
+	if term || o.CrossPair || o.Pair != "USDT/USDT" {
+		t.Errorf("USDT0<->USDT must be a plain USDT/USDT par leg: %+v", o)
 	}
 }
 

@@ -87,23 +87,15 @@ type Oriented struct {
 	QuoteAmt    decimal.Decimal
 }
 
-// stableFamily collapses wrapped variants of the same stable onto one family
-// so the USDT<->USDC cross detection sees through bridges (USDT0 is Tether's
-// omnichain USDT).
-func stableFamily(sym string) string {
-	if sym == "USDT0" {
-		return "USDT"
-	}
-	return sym
-}
-
 // CrossRate converts the Binance USDCUSDT mid (USDT per USDC) into this leg's
-// quote-per-base fair rate. Only meaningful when CrossPair is set.
+// quote-per-base fair rate. Only meaningful when CrossPair is set. Wrapped
+// variants (USDT0, Tether's omnichain USDT) are already collapsed onto their
+// base symbol by assets.BaseSymbol, so direct comparison suffices.
 func (o *Oriented) CrossRate(usdtPerUsdc float64) float64 {
-	if stableFamily(o.Quote) == "USDT" { // base family is USDC
+	if o.Quote == "USDT" { // base is USDC
 		return usdtPerUsdc
 	}
-	return 1 / usdtPerUsdc // base family is USDT, quote is USDC
+	return 1 / usdtPerUsdc // base is USDT, quote is USDC
 }
 
 // legInput is the slice of a legs row that orientation needs.
@@ -158,9 +150,7 @@ func orientLeg(reg *assets.Registry, l legInput) (o *Oriented, terminal bool) {
 			l.AmountIn.IsZero() || l.AmountOut.IsZero() {
 			return nil, true
 		}
-		famRecv, famGive := stableFamily(fb), stableFamily(tb)
-		cross := (famRecv == "USDT" && famGive == "USDC") ||
-			(famRecv == "USDC" && famGive == "USDT")
+		cross := (fb == "USDT" && tb == "USDC") || (fb == "USDC" && tb == "USDT")
 		return &Oriented{
 			Par: true, CrossPair: cross,
 			FromBase: fb, ToBase: tb, Base: tb, Quote: fb,

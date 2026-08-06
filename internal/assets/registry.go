@@ -40,6 +40,7 @@ var BinanceAlias = map[string]string{
 	"BTC(OMNI)": "BTC", "WNEAR": "NEAR", "WETH": "ETH", "WBTC": "BTC",
 	"CBBTC": "BTC", "WSOL": "SOL", "WBNB": "BNB", "WMATIC": "POL",
 	"MATIC": "POL", "WAVAX": "AVAX", "WPOL": "POL",
+	"USDT0": "USDT", // Tether's omnichain USDT: same underlying, so USDT<->USDT0 is a bridge leg
 }
 
 type Asset struct {
