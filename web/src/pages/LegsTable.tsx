@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { apiGet, rangeParams, type Leg } from "../api";
-import { Bps, ClassBadge, DataTable, fmtTime, fmtUsd, SectionCard, shortHash, Spinner, useRange } from "../components";
+import { Bps, DataTable, fmtTime, fmtUsd, SectionCard, shortHash, Spinner, useRange } from "../components";
 import { EdgeHistogram } from "../charts";
 
 // Shared "recent legs" section for pair / solver detail pages, with an edge
@@ -58,7 +58,6 @@ export default function LegsSection({ filter, title }: { filter: Record<string, 
                   </a>
                 ),
               },
-              { key: "class", label: "class", align: "left", value: (l: Leg) => <ClassBadge cls={l.leg_class} /> },
               {
                 key: "recv",
                 label: "received",
@@ -77,7 +76,7 @@ export default function LegsSection({ filter, title }: { filter: Record<string, 
               },
               {
                 key: "edge",
-                label: "edge bps (HL)",
+                label: "edge bps",
                 value: (l: Leg) => <Bps v={l.edge_bps_hl} />,
                 sortVal: (l: Leg) => l.edge_bps_hl ?? -1e9,
               },

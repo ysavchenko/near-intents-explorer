@@ -7,16 +7,12 @@ import Pairs from "./pages/Pairs";
 import PairDetail from "./pages/PairDetail";
 import Solvers from "./pages/Solvers";
 import SolverDetail from "./pages/SolverDetail";
-import Bridges from "./pages/Bridges";
-import Multihop from "./pages/Multihop";
 import StatusPage from "./pages/Status";
 
 const NAV = [
   { to: "/", label: "Overview" },
   { to: "/pairs", label: "Pairs" },
   { to: "/solvers", label: "Solvers" },
-  { to: "/bridges", label: "Bridges" },
-  { to: "/multihop", label: "Multi-hop" },
   { to: "/status", label: "Status" },
 ];
 
@@ -30,9 +26,9 @@ export default function App() {
           className="sticky top-0 z-10 border-b"
           style={{ background: "var(--surface-1)", borderColor: "var(--border)" }}
         >
-          <div className="mx-auto flex max-w-6xl items-center gap-1 px-4 py-2">
+          <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-1 gap-y-1 px-4 py-2">
             <span className="mr-3 text-sm font-bold whitespace-nowrap">NEAR Intents Explorer</span>
-            <nav className="flex flex-1 items-center gap-1 overflow-x-auto">
+            <nav className="flex flex-1 flex-wrap items-center gap-1">
               {NAV.map((n) => (
                 <NavLink
                   key={n.to}
@@ -49,7 +45,7 @@ export default function App() {
                 </NavLink>
               ))}
             </nav>
-            <div className="flex items-center gap-0.5">
+            <div className="flex flex-wrap items-center gap-0.5">
               {AMOUNTS.map((a) => (
                 <button
                   key={a.min}
@@ -92,8 +88,6 @@ export default function App() {
             <Route path="/pair" element={<PairDetail />} />
             <Route path="/solvers" element={<Solvers />} />
             <Route path="/solvers/:id" element={<SolverDetail />} />
-            <Route path="/bridges" element={<Bridges />} />
-            <Route path="/multihop" element={<Multihop />} />
             <Route path="/status" element={<StatusPage />} />
           </Routes>
         </main>

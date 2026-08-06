@@ -72,7 +72,6 @@ function BalancesSection({ solver }: { solver: string }) {
 
 type SolverResp = {
   solver: string;
-  is_seed: boolean;
   n_settlements: number;
   first_seen: string | null;
   pairs: AggRow[];
@@ -113,7 +112,7 @@ export default function SolverDetail() {
       <div className="flex items-baseline gap-3">
         <h1 className="mono text-lg font-bold break-all">{s.solver}</h1>
         <span className="shrink-0 text-xs" style={{ color: "var(--text-muted)" }}>
-          {s.is_seed ? "seed solver" : "learned by frequency"} · {s.n_settlements.toLocaleString()} settlements
+          {s.n_settlements.toLocaleString()} settlements
           {" · "}
           <Link to="/solvers" style={{ color: "var(--series-1)" }}>
             all solvers

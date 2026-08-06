@@ -9,10 +9,6 @@ export type AggRow = {
   to_label?: string;
   n_legs: number;
   volume_usd: number;
-  binance_n: number;
-  binance_vw_edge_bps: number | null;
-  binance_mean_edge_bps: number | null;
-  binance_fees_usd: number | null;
   hl_n: number;
   hl_vw_edge_bps: number | null;
   hl_mean_edge_bps: number | null;
@@ -37,9 +33,7 @@ export type Leg = {
   side: string | null;
   native_rate: number | null;
   hl_rate: number | null;
-  binance_rate: number | null;
   edge_bps_hl: number | null;
-  edge_bps_binance: number | null;
   notional_usd: number | null;
   price_status: string;
 };
@@ -71,59 +65,6 @@ export type Status = {
   venues: string[];
   solvers_learned: number;
   counters: Record<string, number>;
-};
-
-export type VwStats = {
-  n: number;
-  volume_usd: number;
-  vw_bps: number | null;
-  mean_bps: number | null;
-  fees_usd: number;
-};
-
-export type SameAsset = {
-  n_legs: number;
-  volume_usd: number;
-  routes: ({ recv_chain: string; give_chain: string; pct_vol: number } & VwStats)[];
-  by_solver: ({ solver: string } & VwStats)[];
-  hub?: {
-    chain: string;
-    rows: { counterparty: string; into: VwStats; out: VwStats }[];
-  };
-  buckets?: {
-    route: string;
-    rows: ({ bucket: string; pct_vol: number; avg_size_usd: number } & VwStats)[];
-  };
-};
-
-export type MultihopRoute = {
-  tx: string;
-  solver: string;
-  ts: string;
-  hops: number;
-  path: string;
-  linear: boolean;
-  synth_pair: string;
-  synth_class: string;
-  stable_intermediate: boolean;
-  source: string;
-  source_chain: string;
-  sink: string;
-  sink_chain: string;
-  intermediates: string[];
-  amount_in: string;
-  amount_out: string;
-  native_rate: number | null;
-  notional_usd: number | null;
-};
-
-export type Multihop = {
-  multi_leg_groups: number;
-  clean: number;
-  complex: number;
-  kept: number;
-  top_intermediates: { label: string; n: number }[];
-  routes: MultihopRoute[];
 };
 
 export type BalanceRow = {

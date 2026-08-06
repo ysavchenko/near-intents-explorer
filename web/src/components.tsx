@@ -202,20 +202,3 @@ export function ErrorBox({ error }: { error: unknown }) {
     </div>
   );
 }
-
-export function ClassBadge({ cls }: { cls: string }) {
-  const label: Record<string, string> = {
-    interesting: "swap",
-    stable_stable: "stable↔stable",
-    same_asset: "bridge",
-    unknown: "unknown",
-  };
-  return (
-    <span
-      className="inline-block rounded px-1.5 py-0.5 text-[11px]"
-      style={{ background: "color-mix(in oklab, var(--text-primary) 7%, transparent)", color: "var(--text-secondary)" }}
-    >
-      {label[cls] ?? cls}
-    </span>
-  );
-}

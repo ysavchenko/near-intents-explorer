@@ -37,8 +37,13 @@ export default function Overview() {
             {r.pair}
           </Link>
         ) : (
-          <Link to={`/solvers/${encodeURIComponent(r.solver!)}`} className="mono" style={{ color: "var(--series-1)" }}>
-            {r.solver!.length > 30 ? r.solver!.slice(0, 30) + "…" : r.solver}
+          <Link
+            to={`/solvers/${encodeURIComponent(r.solver!)}`}
+            className="mono"
+            style={{ color: "var(--series-1)" }}
+            title={r.solver}
+          >
+            {r.solver!.length > 24 ? r.solver!.slice(0, 24) + "…" : r.solver}
           </Link>
         ),
       sortVal: (r: AggRow) => (keyCol === "pair" ? r.pair! : r.solver!),
@@ -47,13 +52,13 @@ export default function Overview() {
     { key: "vol", label: "volume", value: (r: AggRow) => fmtUsd(r.volume_usd), sortVal: (r: AggRow) => r.volume_usd },
     {
       key: "fees",
-      label: "fees (HL)",
+      label: "fees",
       value: (r: AggRow) => <UsdDelta v={r.hl_fees_usd} />,
       sortVal: (r: AggRow) => r.hl_fees_usd ?? -1e9,
     },
     {
       key: "vw",
-      label: "vw edge (HL)",
+      label: "vw edge",
       value: (r: AggRow) => <Bps v={r.hl_vw_edge_bps} />,
       sortVal: (r: AggRow) => r.hl_vw_edge_bps ?? -1e9,
     },

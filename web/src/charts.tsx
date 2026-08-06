@@ -129,7 +129,7 @@ export function EdgeLine({
         />
         <Tooltip
           {...chartTooltipStyle()}
-          formatter={(v) => [`${fmtBpsValue(Number(v))} bps`, "VW edge (HL)"]}
+          formatter={(v) => [`${fmtBpsValue(Number(v))} bps`, "VW edge"]}
           labelFormatter={(v) => new Date(String(v)).toISOString().replace("T", " ").slice(0, 16) + "Z"}
         />
         <Line

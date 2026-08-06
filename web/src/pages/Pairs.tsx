@@ -49,28 +49,22 @@ export const aggTableCols = (linkPair: boolean, solver?: string) => [
   { key: "vol", label: "volume", value: (r: AggRow) => fmtUsd(r.volume_usd), sortVal: (r: AggRow) => r.volume_usd },
   {
     key: "fees",
-    label: "fees (HL)",
+    label: "fees",
     value: (r: AggRow) => <UsdDelta v={r.hl_fees_usd} />,
     sortVal: (r: AggRow) => r.hl_fees_usd ?? -1e9,
   },
-  { key: "hn", label: "HL n", value: (r: AggRow) => fmtNum(r.hl_n), sortVal: (r: AggRow) => r.hl_n },
+  { key: "hn", label: "priced", value: (r: AggRow) => fmtNum(r.hl_n), sortVal: (r: AggRow) => r.hl_n },
   {
     key: "hvw",
-    label: "HL vw bps",
+    label: "vw bps",
     value: (r: AggRow) => <Bps v={r.hl_vw_edge_bps} />,
     sortVal: (r: AggRow) => r.hl_vw_edge_bps ?? -1e9,
   },
   {
     key: "hmean",
-    label: "HL mean bps",
+    label: "mean bps",
     value: (r: AggRow) => <Bps v={r.hl_mean_edge_bps} />,
     sortVal: (r: AggRow) => r.hl_mean_edge_bps ?? -1e9,
-  },
-  {
-    key: "bvw",
-    label: "Binance vw bps",
-    value: (r: AggRow) => <Bps v={r.binance_vw_edge_bps} />,
-    sortVal: (r: AggRow) => r.binance_vw_edge_bps ?? -1e9,
   },
 ];
 
