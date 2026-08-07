@@ -17,6 +17,7 @@ type flowOut struct {
 	Direction            string    `json:"direction"`
 	AssetID              string    `json:"asset_id"`
 	Label                string    `json:"label"`
+	Chain                string    `json:"chain"` // asset's chain (explorer links for external addresses)
 	Amount               *string   `json:"amount"`
 	ValueUSD             *float64  `json:"value_usd"`
 	Counterparty         *string   `json:"counterparty"`
@@ -101,6 +102,9 @@ func (s *Server) handleFlows(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		o.Label = s.Registry.Label(o.AssetID)
+		if a := s.Registry.Get(o.AssetID); a != nil {
+			o.Chain = a.Blockchain
+		}
 		if o.Amount != nil {
 			if p := s.priceOf(o.AssetID); p != nil {
 				if amt, err := strconv.ParseFloat(*o.Amount, 64); err == nil {

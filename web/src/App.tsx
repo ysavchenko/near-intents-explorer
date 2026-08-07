@@ -7,7 +7,7 @@ import Pairs from "./pages/Pairs";
 import PairDetail from "./pages/PairDetail";
 import Solvers from "./pages/Solvers";
 import SolverDetail from "./pages/SolverDetail";
-import FlowsPage from "./pages/Flows";
+import FlowsPage, { SolverFlowsPage } from "./pages/Flows";
 import StatusPage from "./pages/Status";
 
 const NAV = [
@@ -90,6 +90,7 @@ export default function App() {
             <Route path="/pair" element={<PairDetail />} />
             <Route path="/solvers" element={<Solvers />} />
             <Route path="/solvers/:id" element={<SolverDetail />} />
+            <Route path="/solvers/:id/flows" element={<SolverFlowsPage />} />
             <Route path="/flows" element={<FlowsPage />} />
             <Route path="/status" element={<StatusPage />} />
           </Routes>

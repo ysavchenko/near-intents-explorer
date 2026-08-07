@@ -5,7 +5,6 @@ import { DataTable, ErrorBox, fmtUsd, SectionCard, Spinner, useRange } from "../
 import { fillBuckets, VolumeBars } from "../charts";
 import { aggTableCols } from "./Pairs";
 import LegsSection from "./LegsTable";
-import { FlowsSection } from "./Flows";
 
 const fmtBalance = (v: string) => {
   const n = Number(v);
@@ -29,12 +28,18 @@ function BalancesSection({ solver }: { solver: string }) {
     <SectionCard
       title="Balances on intents.near"
       right={
-        q.data && (
-          <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-            total <span className="font-semibold">{fmtUsd(q.data.total_usd)}</span>
-            {!q.data.total_complete && " (some unpriced)"}
-          </span>
-        )
+        <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+          {q.data && (
+            <>
+              total <span className="font-semibold">{fmtUsd(q.data.total_usd)}</span>
+              {!q.data.total_complete && " (some unpriced)"}
+              {" · "}
+            </>
+          )}
+          <Link to={`/solvers/${encodeURIComponent(solver)}/flows`} style={{ color: "var(--series-1)" }}>
+            deposits & withdrawals →
+          </Link>
+        </span>
       }
     >
       {q.error ? (
@@ -126,7 +131,6 @@ export default function SolverDetail() {
         </div>
       </SectionCard>
       <BalancesSection solver={id} />
-      <FlowsSection solver={id} />
       <SectionCard title="Pairs (real spreads)">
         <DataTable cols={aggTableCols(true, id)} rows={s.pairs} rowKey={(r) => r.pair!} defaultSort="vol" />
       </SectionCard>

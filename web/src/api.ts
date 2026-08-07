@@ -93,6 +93,7 @@ export type FlowRow = {
   direction: "deposit" | "withdrawal" | "transfer_in" | "transfer_out";
   asset_id: string;
   label: string;
+  chain: string;
   amount: string | null;
   value_usd: number | null;
   counterparty: string | null;
