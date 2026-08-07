@@ -27,17 +27,20 @@ const EXPLORERS: Record<string, { addr: (a: string) => string; tx: (h: string) =
   zec: { addr: (a) => `https://blockchair.com/zcash/address/${a}`, tx: (h) => `https://blockchair.com/zcash/transaction/${h}` },
   xrp: { addr: (a) => `https://xrpscan.com/account/${a}`, tx: (h) => `https://xrpscan.com/tx/${h}` },
   ton: { addr: (a) => `https://tonviewer.com/${a}`, tx: (h) => `https://tonviewer.com/transaction/${h}` },
-  near: { addr: (a) => `https://nearblocks.io/address/${a}`, tx: (h) => `https://nearblocks.io/txns/${h}` },
 };
 
-// Full-width address, linked to an explorer when one is known. NEAR accounts
-// always resolve to nearblocks; external ones use the asset's chain.
-function Addr({ value, chain, near }: { value: string; chain?: string; near?: boolean }) {
-  const url = near ? EXPLORERS.near.addr(value) : chain && EXPLORERS[chain] ? EXPLORERS[chain].addr(value) : null;
-  const text = <span className="mono break-all">{value}</span>;
-  if (!url) return text;
+// Ellipsized external-chain reference (address or tx) linked to the chain's
+// explorer. The link is the point — NEAR-side accounts render as plain text.
+function ExternalLink({ chain, value, kind }: { chain: string; value: string; kind: "addr" | "tx" }) {
+  const ex = EXPLORERS[chain];
+  const text = (
+    <span className="mono" title={value}>
+      {shortHash(value, 14)}
+    </span>
+  );
+  if (!ex) return text;
   return (
-    <a href={url} target="_blank" rel="noreferrer" style={{ color: "var(--series-1)" }}>
+    <a href={ex[kind](value)} target="_blank" rel="noreferrer" style={{ color: "var(--series-1)" }}>
       {text}
     </a>
   );
@@ -71,68 +74,49 @@ const fmtAmount = (v: string | null) => {
   return n >= 1000 ? n.toLocaleString(undefined, { maximumFractionDigits: 2 }) : n.toPrecision(6);
 };
 
-// The "other end" of a flow, one line per hop: the NEAR-side counterparty
-// and/or the external-chain address / origin tx, fully displayed and linked
-// to the matching explorer.
+// The "other end" of a flow: the external-chain address (withdrawal
+// destination) or origin tx (bridged deposit source), linked to the chain
+// explorer. NEAR-side counterparties are context, not links.
 function Counterparty({ row }: { row: FlowRow }) {
   const muted = { color: "var(--text-muted)" };
-  const lines: React.ReactNode[] = [];
+  const parts: React.ReactNode[] = [];
   if (row.direction === "deposit") {
-    if (row.origin_chain) {
-      lines.push(
-        <div key="o">
+    if (row.origin_chain && row.origin_tx) {
+      parts.push(
+        <span key="o">
           <span style={muted}>from {row.origin_chain} </span>
-          {row.origin_tx &&
-            (EXPLORERS[row.origin_chain] ? (
-              <a
-                href={EXPLORERS[row.origin_chain].tx(row.origin_tx)}
-                target="_blank"
-                rel="noreferrer"
-                style={{ color: "var(--series-1)" }}
-              >
-                <span className="mono break-all">{row.origin_tx}</span>
-              </a>
-            ) : (
-              <span className="mono break-all">{row.origin_tx}</span>
-            ))}
-        </div>,
+          <ExternalLink chain={row.origin_chain} value={row.origin_tx} kind="tx" />
+        </span>,
       );
     } else if (row.counterparty) {
-      lines.push(
-        <div key="c">
+      parts.push(
+        <span key="c" className="mono" title={row.counterparty}>
           <span style={muted}>from </span>
-          <Addr value={row.counterparty} near />
-        </div>,
+          {shortHash(row.counterparty, 14)}
+        </span>,
       );
     }
   } else {
     const dir = row.direction === "transfer_in" ? "from" : "to";
     if (row.counterparty) {
-      lines.push(
-        <div key="c">
+      parts.push(
+        <span key="c" className="mono" title={row.counterparty}>
           <span style={muted}>{dir} </span>
-          <Addr value={row.counterparty} near />
-        </div>,
+          {shortHash(row.counterparty, 14)}
+        </span>,
       );
     }
     if (row.external_address) {
-      lines.push(
-        <div key="e">
-          <span style={muted}>→ {row.chain} </span>
-          <Addr value={row.external_address} chain={row.chain} />
-        </div>,
+      parts.push(
+        <span key="e">
+          <span style={muted}> → {row.chain} </span>
+          <ExternalLink chain={row.chain} value={row.external_address} kind="addr" />
+        </span>,
       );
     }
   }
-  if (lines.length === 0) return <span style={muted}>–</span>;
-  return (
-    <div
-      className="space-y-0.5 text-xs"
-      style={{ minWidth: "18rem", maxWidth: "24rem", whiteSpace: "normal" }}
-    >
-      {lines}
-    </div>
-  );
+  if (parts.length === 0) return <span style={muted}>–</span>;
+  return <span className="text-xs whitespace-nowrap">{parts}</span>;
 }
 
 export function FlowsSection({ solver, title = "Deposits & withdrawals" }: { solver?: string; title?: string }) {
@@ -295,7 +279,7 @@ export function FlowsSection({ solver, title = "Deposits & withdrawals" }: { sol
                 if (memo === "deposit" || memo === "withdraw" || memo.startsWith("WITHDRAW_TO:")) return null;
                 return (
                   <span className="block text-xs" style={{ color: "var(--text-muted)", maxWidth: "10rem" }} title={memo}>
-                    {memo.length > 16 ? memo.slice(0, 16) + "…" : memo}
+                    {memo.length > 12 ? memo.slice(0, 12) + "…" : memo}
                   </span>
                 );
               },
