@@ -63,6 +63,7 @@ func (s *Server) Router() http.Handler {
 			r.Get("/solvers", s.handleSolvers)
 			r.Get("/solvers/{id}", s.handleSolverDetail)
 			r.Get("/solvers/{id}/balances", s.handleSolverBalances)
+			r.Get("/flows", s.handleFlows)
 			r.Get("/legs", s.handleLegs)
 			r.Get("/daily", s.handleDaily)
 			r.Get("/routes/same-asset", s.handleSameAsset)

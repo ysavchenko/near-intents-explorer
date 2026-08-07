@@ -7,12 +7,14 @@ import Pairs from "./pages/Pairs";
 import PairDetail from "./pages/PairDetail";
 import Solvers from "./pages/Solvers";
 import SolverDetail from "./pages/SolverDetail";
+import FlowsPage from "./pages/Flows";
 import StatusPage from "./pages/Status";
 
 const NAV = [
   { to: "/", label: "Overview" },
   { to: "/pairs", label: "Pairs" },
   { to: "/solvers", label: "Solvers" },
+  { to: "/flows", label: "Flows" },
   { to: "/status", label: "Status" },
 ];
 
@@ -88,6 +90,7 @@ export default function App() {
             <Route path="/pair" element={<PairDetail />} />
             <Route path="/solvers" element={<Solvers />} />
             <Route path="/solvers/:id" element={<SolverDetail />} />
+            <Route path="/flows" element={<FlowsPage />} />
             <Route path="/status" element={<StatusPage />} />
           </Routes>
         </main>

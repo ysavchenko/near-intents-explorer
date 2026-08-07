@@ -669,6 +669,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 			"settlements":         m.SettlementsTotal.Load(),
 			"settlements_failed":  m.SettlementsFailed.Load(),
 			"legs":                m.LegsTotal.Load(),
+			"flows":               m.FlowsTotal.Load(),
 			"parse_errors":        m.ParseErrors.Load(),
 			"follower_errors":     m.FollowerErrors.Load(),
 			"enriched_legs":       m.EnrichedLegs.Load(),

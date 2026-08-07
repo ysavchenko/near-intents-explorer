@@ -18,6 +18,7 @@ type Metrics struct {
 	SettlementsTotal  atomic.Int64
 	SettlementsFailed atomic.Int64
 	LegsTotal         atomic.Int64
+	FlowsTotal        atomic.Int64
 	ParseErrors       atomic.Int64
 	FollowerErrors    atomic.Int64
 

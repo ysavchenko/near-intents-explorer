@@ -66,6 +66,7 @@ type ExecutionOutcome struct {
 	Outcome struct {
 		ExecutorID string          `json:"executor_id"`
 		ReceiptIDs []string        `json:"receipt_ids"`
+		Logs       []string        `json:"logs"`
 		Status     json.RawMessage `json:"status"`
 	} `json:"outcome"`
 }
@@ -73,10 +74,25 @@ type ExecutionOutcome struct {
 type ReceiptExecutionOutcome struct {
 	ExecutionOutcome ExecutionOutcome `json:"execution_outcome"`
 	Receipt          struct {
-		ReceiptID  string `json:"receipt_id"`
-		ReceiverID string `json:"receiver_id"`
+		ReceiptID     string `json:"receipt_id"`
+		PredecessorID string `json:"predecessor_id"`
+		ReceiverID    string `json:"receiver_id"`
+		Receipt       struct {
+			Action *struct {
+				SignerID string            `json:"signer_id"`
+				Actions  []json.RawMessage `json:"actions"`
+			} `json:"Action"`
+		} `json:"receipt"`
 	} `json:"receipt"`
 	TxHash string `json:"tx_hash"` // neardata addition
+}
+
+// Actions returns the receipt's actions (empty for data receipts).
+func (r *ReceiptExecutionOutcome) Actions() []json.RawMessage {
+	if r.Receipt.Receipt.Action == nil {
+		return nil
+	}
+	return r.Receipt.Receipt.Action.Actions
 }
 
 // StatusSucceeded reports whether an execution outcome status is a success

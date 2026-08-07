@@ -84,6 +84,32 @@ export type SolverBalances = {
   fetched_at: string;
 };
 
+export type FlowRow = {
+  ts: string;
+  tx: string;
+  receipt_id: string;
+  seq: number;
+  solver: string;
+  direction: "deposit" | "withdrawal" | "transfer_in" | "transfer_out";
+  asset_id: string;
+  label: string;
+  amount: string | null;
+  value_usd: number | null;
+  counterparty: string | null;
+  counterparty_withdrew: boolean;
+  external_address: string | null;
+  origin_chain: string | null;
+  origin_tx: string | null;
+  memo: string | null;
+};
+
+export type FlowsResp = {
+  from: string;
+  to: string;
+  rows: FlowRow[];
+  totals: Record<string, { n: number; value_usd: number; complete: boolean }>;
+};
+
 export type DailyPoint = {
   ts: string;
   key: string;

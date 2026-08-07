@@ -54,6 +54,7 @@ type Follower struct {
 
 	cursor  int64
 	pending map[string]*pendingSettlement // receipt_id -> settlement awaiting outcome
+	origins map[string]*originEntry      // tx_hash -> BRIDGED_FROM provenance (short TTL)
 	lastReq time.Time
 }
 
@@ -70,22 +71,52 @@ type pendingSettlement struct {
 }
 
 type signedMsgJSON struct {
-	Signer      string        `json:"signer"`
-	Kinds       []string      `json:"kinds"`
-	TokenDiffs  [][][2]string `json:"token_diffs"` // [ [ [asset, amount], ... ], ... ]
-	HasReferral bool          `json:"has_referral,omitempty"`
+	Signer      string                     `json:"signer"`
+	Kinds       []string                   `json:"kinds"`
+	TokenDiffs  [][][2]string              `json:"token_diffs"` // [ [ [asset, amount], ... ], ... ]
+	HasReferral bool                       `json:"has_referral,omitempty"`
+	Withdrawals []intents.WithdrawalIntent `json:"withdrawals,omitempty"`
+	Transfers   []transferJSON             `json:"transfers,omitempty"`
+}
+
+type transferJSON struct {
+	Receiver string      `json:"receiver"`
+	Tokens   [][2]string `json:"tokens"`
+	Memo     string      `json:"memo,omitempty"`
+}
+
+func entriesToJSON(entries []intents.DiffEntry) [][2]string {
+	var out [][2]string
+	for _, e := range entries {
+		out = append(out, [2]string{e.Asset, e.Amount.String()})
+	}
+	return out
+}
+
+func entriesFromJSON(pairs [][2]string) ([]intents.DiffEntry, error) {
+	var out []intents.DiffEntry
+	for _, e := range pairs {
+		n, ok := new(big.Int).SetString(e[1], 10)
+		if !ok {
+			return nil, fmt.Errorf("bad amount %q", e[1])
+		}
+		out = append(out, intents.DiffEntry{Asset: e[0], Amount: n})
+	}
+	return out, nil
 }
 
 func msgsToJSON(msgs []intents.SignedMsg) []signedMsgJSON {
 	out := make([]signedMsgJSON, len(msgs))
 	for i, m := range msgs {
-		j := signedMsgJSON{Signer: m.Signer, Kinds: m.Kinds, HasReferral: m.HasReferral}
+		j := signedMsgJSON{Signer: m.Signer, Kinds: m.Kinds, HasReferral: m.HasReferral,
+			Withdrawals: m.Withdrawals}
 		for _, d := range m.TokenDiffs {
-			var entries [][2]string
-			for _, e := range d {
-				entries = append(entries, [2]string{e.Asset, e.Amount.String()})
-			}
-			j.TokenDiffs = append(j.TokenDiffs, entries)
+			j.TokenDiffs = append(j.TokenDiffs, entriesToJSON(d))
+		}
+		for _, t := range m.Transfers {
+			j.Transfers = append(j.Transfers, transferJSON{
+				Receiver: t.Receiver, Tokens: entriesToJSON(t.Tokens), Memo: t.Memo,
+			})
 		}
 		out[i] = j
 	}
@@ -95,17 +126,23 @@ func msgsToJSON(msgs []intents.SignedMsg) []signedMsgJSON {
 func msgsFromJSON(js []signedMsgJSON) ([]intents.SignedMsg, error) {
 	out := make([]intents.SignedMsg, len(js))
 	for i, j := range js {
-		m := intents.SignedMsg{Signer: j.Signer, Kinds: j.Kinds, HasReferral: j.HasReferral}
+		m := intents.SignedMsg{Signer: j.Signer, Kinds: j.Kinds, HasReferral: j.HasReferral,
+			Withdrawals: j.Withdrawals}
 		for _, d := range j.TokenDiffs {
-			var entries []intents.DiffEntry
-			for _, e := range d {
-				n, ok := new(big.Int).SetString(e[1], 10)
-				if !ok {
-					return nil, fmt.Errorf("bad amount %q", e[1])
-				}
-				entries = append(entries, intents.DiffEntry{Asset: e[0], Amount: n})
+			entries, err := entriesFromJSON(d)
+			if err != nil {
+				return nil, err
 			}
 			m.TokenDiffs = append(m.TokenDiffs, entries)
+		}
+		for _, t := range j.Transfers {
+			tokens, err := entriesFromJSON(t.Tokens)
+			if err != nil {
+				return nil, err
+			}
+			m.Transfers = append(m.Transfers, intents.TransferIntent{
+				Receiver: t.Receiver, Tokens: tokens, Memo: t.Memo,
+			})
 		}
 		out[i] = m
 	}
@@ -173,6 +210,7 @@ func (f *Follower) pace() {
 
 func (f *Follower) loadState(ctx context.Context) error {
 	f.pending = map[string]*pendingSettlement{}
+	f.origins = map[string]*originEntry{}
 
 	var cursorRaw, pendingRaw []byte
 	err := f.Pool.QueryRow(ctx, `SELECT value FROM indexer_state WHERE key=$1`, cursorKey).Scan(&cursorRaw)
@@ -218,6 +256,7 @@ func (f *Follower) loadState(ctx context.Context) error {
 type resolution struct {
 	p         *pendingSettlement
 	succeeded bool
+	logs      []string // receipt outcome logs (burn/mint events for flows)
 }
 
 func (f *Follower) processBlock(ctx context.Context, block *neardata.Block) error {
@@ -260,22 +299,32 @@ func (f *Follower) processBlock(ctx context.Context, block *neardata.Block) erro
 		}
 	}
 
-	// 2. Resolve pending settlements whose receipt outcome appears in this
-	// block (possibly the same block the tx was included in).
+	// 2. Walk receipt outcomes: harvest BRIDGED_FROM provenance (bridge-token
+	// receipts, any executor), resolve pending settlements (keeping their
+	// logs for flow extraction), and collect deposit/withdrawal/transfer
+	// flows from other successful intents.near receipts.
 	var resolutions []resolution
+	var flows []flowRow
 	for _, shard := range block.Shards {
-		for _, reo := range shard.ReceiptExecutionOutcomes {
-			p, ok := f.pending[reo.ExecutionOutcome.ID]
-			if !ok {
+		for i := range shard.ReceiptExecutionOutcomes {
+			reo := &shard.ReceiptExecutionOutcomes[i]
+			f.harvestOrigins(reo, height)
+			if p, ok := f.pending[reo.ExecutionOutcome.ID]; ok {
+				resolutions = append(resolutions, resolution{
+					p:         p,
+					succeeded: neardata.StatusSucceeded(reo.ExecutionOutcome.Outcome.Status),
+					logs:      reo.ExecutionOutcome.Outcome.Logs,
+				})
+				delete(f.pending, reo.ExecutionOutcome.ID)
 				continue
 			}
-			resolutions = append(resolutions, resolution{
-				p:         p,
-				succeeded: neardata.StatusSucceeded(reo.ExecutionOutcome.Outcome.Status),
-			})
-			delete(f.pending, reo.ExecutionOutcome.ID)
+			if reo.ExecutionOutcome.Outcome.ExecutorID == intents.Contract &&
+				neardata.StatusSucceeded(reo.ExecutionOutcome.Outcome.Status) {
+				flows = append(flows, f.genericFlows(reo, height, tsNs)...)
+			}
 		}
 	}
+	f.pruneOrigins(height)
 
 	// 3. Expire stuck entries (safety valve; should never fire).
 	for id, p := range f.pending {
@@ -287,15 +336,16 @@ func (f *Follower) processBlock(ctx context.Context, block *neardata.Block) erro
 		}
 	}
 
-	if discovered == 0 && len(resolutions) == 0 {
+	if discovered == 0 && len(resolutions) == 0 && len(flows) == 0 {
 		return f.persistCursorAt(ctx, height)
 	}
-	return f.commitBlock(ctx, height, resolutions)
+	return f.commitBlock(ctx, height, resolutions, flows)
 }
 
 // commitBlock writes everything from one block atomically: resolved
-// settlements + their legs + solver-count bumps + cursor + pending map.
-func (f *Follower) commitBlock(ctx context.Context, height int64, resolutions []resolution) error {
+// settlements + their legs + solver flows + solver-count bumps + cursor +
+// pending map.
+func (f *Follower) commitBlock(ctx context.Context, height int64, resolutions []resolution, flows []flowRow) error {
 	tx, err := f.Pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -306,6 +356,9 @@ func (f *Follower) commitBlock(ctx context.Context, height int64, resolutions []
 		if err := f.writeSettlement(ctx, tx, r); err != nil {
 			return fmt.Errorf("settlement %s: %w", r.p.TxHash, err)
 		}
+	}
+	if err := writeFlows(ctx, tx, f, flows); err != nil {
+		return fmt.Errorf("flows: %w", err)
 	}
 	if err := f.writeState(ctx, tx, height); err != nil {
 		return err
@@ -382,6 +435,9 @@ func (f *Follower) writeSettlement(ctx context.Context, tx pgx.Tx, r resolution)
 			amountIn, amountOut); err != nil {
 			return err
 		}
+	}
+	if err := writeFlows(ctx, tx, f, f.settlementFlows(p, msgs, r.logs)); err != nil {
+		return fmt.Errorf("flows: %w", err)
 	}
 	f.Metrics.SettlementsTotal.Add(1)
 	f.Metrics.LegsTotal.Add(int64(len(legs)))

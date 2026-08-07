@@ -43,6 +43,10 @@ type SignedMsg struct {
 	Kinds       []string
 	TokenDiffs  [][]DiffEntry // one per token_diff intent (zero entries dropped)
 	HasReferral bool          // any intent carried a `referral` (aggregator-routed user flow)
+
+	// Flow enrichment (does not affect classification):
+	Withdrawals []WithdrawalIntent // *_withdraw intents (destination for burn events)
+	Transfers   []TransferIntent   // `transfer` intents (internal moves)
 }
 
 func (m *SignedMsg) HasWithdrawal() bool {
@@ -91,11 +95,7 @@ func messageToSigned(raw []byte) SignedMsg {
 		out.Signer = "?"
 	}
 	for _, it := range msg.Intents {
-		var intent struct {
-			Intent   string          `json:"intent"`
-			Diff     json.RawMessage `json:"diff"`
-			Referral string          `json:"referral"`
-		}
+		var intent intentBody
 		if err := json.Unmarshal(it, &intent); err != nil {
 			continue
 		}
@@ -107,13 +107,26 @@ func messageToSigned(raw []byte) SignedMsg {
 		if intent.Referral != "" {
 			out.HasReferral = true
 		}
-		if intent.Intent == "token_diff" {
+		switch intent.Intent {
+		case "token_diff":
 			d, err := parseDiff(intent.Diff)
 			if err != nil {
 				continue
 			}
 			if len(d) > 0 {
 				out.TokenDiffs = append(out.TokenDiffs, d)
+			}
+		case "transfer":
+			tokens, err := parseDiff(intent.Tokens) // same {asset: amount} shape
+			if err != nil || len(tokens) == 0 {
+				continue
+			}
+			out.Transfers = append(out.Transfers, TransferIntent{
+				Receiver: intent.ReceiverID, Tokens: tokens, Memo: intent.Memo,
+			})
+		default:
+			if w := withdrawalFromIntent(intent.Intent, intent); w != nil {
+				out.Withdrawals = append(out.Withdrawals, *w)
 			}
 		}
 	}

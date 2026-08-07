@@ -5,6 +5,7 @@ import { DataTable, ErrorBox, fmtUsd, SectionCard, Spinner, useRange } from "../
 import { fillBuckets, VolumeBars } from "../charts";
 import { aggTableCols } from "./Pairs";
 import LegsSection from "./LegsTable";
+import { FlowsSection } from "./Flows";
 
 const fmtBalance = (v: string) => {
   const n = Number(v);
@@ -125,6 +126,7 @@ export default function SolverDetail() {
         </div>
       </SectionCard>
       <BalancesSection solver={id} />
+      <FlowsSection solver={id} />
       <SectionCard title="Pairs (real spreads)">
         <DataTable cols={aggTableCols(true, id)} rows={s.pairs} rowKey={(r) => r.pair!} defaultSort="vol" />
       </SectionCard>
