@@ -560,19 +560,22 @@ func (s *Server) handleDaily(w http.ResponseWriter, r *http.Request) {
 		q = fmt.Sprintf(`SELECT date_trunc('%s', block_ts) AS b, '' AS key, count(*),
 			COALESCE(sum(notional_usd),0),
 			sum(edge_bps_hl*notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL)
-			  / NULLIF(sum(notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL),0)
+			  / NULLIF(sum(notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL),0),
+			sum(edge_bps_hl*notional_usd/1e4) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL)
 			FROM legs WHERE %s GROUP BY 1 ORDER BY 1`, bucket, f.where())
 	case "pair", "solver":
 		q = fmt.Sprintf(`SELECT date_trunc('%s', block_ts) AS b, %s AS key, count(*),
 			COALESCE(sum(notional_usd),0),
 			sum(edge_bps_hl*notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL)
-			  / NULLIF(sum(notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL),0)
+			  / NULLIF(sum(notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL),0),
+			sum(edge_bps_hl*notional_usd/1e4) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL)
 			FROM legs WHERE %s GROUP BY 1, 2 ORDER BY 1, 4 DESC`, bucket, group, f.where())
 	case "token":
 		// A leg counts toward both of its sides' tokens.
 		q = fmt.Sprintf(`SELECT b, key, count(*), COALESCE(sum(notional_usd),0),
 			sum(edge_bps_hl*notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL)
-			  / NULLIF(sum(notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL),0)
+			  / NULLIF(sum(notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL),0),
+			sum(edge_bps_hl*notional_usd/1e4) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL)
 			FROM (
 			  SELECT date_trunc('%[1]s', block_ts) AS b, base_symbol AS key, notional_usd, edge_bps_hl
 			  FROM legs WHERE %[2]s
@@ -600,11 +603,12 @@ func (s *Server) handleDaily(w http.ResponseWriter, r *http.Request) {
 		NLegs     int64     `json:"n_legs"`
 		VolumeUSD float64   `json:"volume_usd"`
 		HlVWEdge  *float64  `json:"hl_vw_edge_bps"`
+		HlFeesUSD *float64  `json:"hl_fees_usd"`
 	}
 	out := []point{}
 	for rows.Next() {
 		var p point
-		if err := rows.Scan(&p.Ts, &p.Key, &p.NLegs, &p.VolumeUSD, &p.HlVWEdge); err != nil {
+		if err := rows.Scan(&p.Ts, &p.Key, &p.NLegs, &p.VolumeUSD, &p.HlVWEdge, &p.HlFeesUSD); err != nil {
 			httpErr(w, 500, err)
 			return
 		}

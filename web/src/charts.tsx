@@ -45,7 +45,7 @@ export function fillBuckets(rows: TimePoint[], from: string, to: string, bucket:
   const have = new Map(rows.map((r) => [new Date(r.ts).getTime(), r]));
   const out: TimePoint[] = [];
   for (let t = align(fromMs); t <= toMs && out.length < 5000; t += step) {
-    out.push(have.get(t) ?? { ts: new Date(t).toISOString(), volume_usd: 0, n_legs: 0, hl_vw_edge_bps: null });
+    out.push(have.get(t) ?? { ts: new Date(t).toISOString(), volume_usd: 0, n_legs: 0, hl_vw_edge_bps: null, hl_fees_usd: 0 });
   }
   return out;
 }
@@ -56,17 +56,20 @@ function fmtTick(iso: string, bucket: "hour" | "day"): string {
   return d.toISOString().slice(5, 10);
 }
 
-// Single-series volume bars over time. One series → no legend; the title
-// names it (dataviz rule).
+// Single-series USD bars over time (volume, or HL-mid fees). One series → no
+// legend; the title names it (dataviz rule).
 export function VolumeBars({
   data,
   bucket,
   height = 220,
+  metric = "volume",
 }: {
   data: TimePoint[];
   bucket: "hour" | "day";
   height?: number;
+  metric?: "volume" | "fees";
 }) {
+  const fees = metric === "fees";
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
@@ -88,10 +91,16 @@ export function VolumeBars({
         />
         <Tooltip
           {...chartTooltipStyle()}
-          formatter={(v) => [fmtUsd(Number(v)), "Volume"]}
+          formatter={(v) => [fmtUsd(Number(v)), fees ? "Fees" : "Volume"]}
           labelFormatter={(v) => new Date(String(v)).toISOString().replace("T", " ").slice(0, 16) + "Z"}
         />
-        <Bar dataKey="volume_usd" fill="var(--series-1)" radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false} />
+        <Bar
+          dataKey={fees ? "hl_fees_usd" : "volume_usd"}
+          fill={fees ? "var(--series-5)" : "var(--series-1)"}
+          radius={[4, 4, 0, 0]}
+          maxBarSize={28}
+          isAnimationActive={false}
+        />
       </BarChart>
     </ResponsiveContainer>
   );

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { apiGet, rangeParams, type AggRow, type BalanceRow, type DailyPoint, type SolverBalances } from "../api";
@@ -89,6 +90,31 @@ function BalancesSection({ solver }: { solver: string }) {
   );
 }
 
+type ActivityMetric = "volume" | "fees";
+
+// Segmented volume/fees switch for the activity chart. Fees are HL-mid fees
+// (same series as the solvers table), so a bucket can go negative.
+function MetricToggle({ metric, setMetric }: { metric: ActivityMetric; setMetric: (m: ActivityMetric) => void }) {
+  return (
+    <div className="flex overflow-hidden rounded border text-xs" style={{ borderColor: "var(--border)" }}>
+      {(["volume", "fees"] as const).map((m) => (
+        <button
+          key={m}
+          onClick={() => setMetric(m)}
+          className="cursor-pointer px-2 py-0.5"
+          style={
+            m === metric
+              ? { background: "color-mix(in oklab, var(--series-1) 14%, transparent)", color: "var(--text-primary)" }
+              : { color: "var(--text-muted)" }
+          }
+        >
+          {m}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 type SolverResp = {
   solver: string;
   n_settlements: number;
@@ -100,6 +126,7 @@ export default function SolverDetail() {
   const { id = "" } = useParams();
   const { hours, minNotional } = useRange();
   const bucket = hours <= 72 ? "hour" : "day";
+  const [metric, setMetric] = useState<ActivityMetric>("volume");
 
   const q = useQuery({
     queryKey: ["solver", id, hours, minNotional],
@@ -138,9 +165,12 @@ export default function SolverDetail() {
           </Link>
         </span>
       </div>
-      <SectionCard title={`Activity by ${bucket} (USD)`}>
+      <SectionCard
+        title={`Activity by ${bucket} — ${metric} (USD)`}
+        right={<MetricToggle metric={metric} setMetric={setMetric} />}
+      >
         <div className="px-2 pb-2">
-          {daily.data ? <VolumeBars data={series} bucket={bucket} height={180} /> : <Spinner />}
+          {daily.data ? <VolumeBars data={series} bucket={bucket} height={180} metric={metric} /> : <Spinner />}
         </div>
       </SectionCard>
       <BalancesSection solver={id} />

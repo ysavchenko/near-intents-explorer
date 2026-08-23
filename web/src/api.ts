@@ -117,6 +117,7 @@ export type DailyPoint = {
   n_legs: number;
   volume_usd: number;
   hl_vw_edge_bps: number | null;
+  hl_fees_usd: number | null;
 };
 
 export async function apiGet<T>(path: string, params?: Record<string, string>): Promise<T> {
