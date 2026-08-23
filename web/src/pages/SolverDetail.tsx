@@ -16,6 +16,13 @@ const fmtPrice = (p: number | null) => {
   return p >= 1 ? `$${p.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : `$${p.toPrecision(4)}`;
 };
 
+const fmtShare = (value: number | null, total: number) => {
+  if (value == null || !(total > 0)) return "–";
+  const pct = (value / total) * 100;
+  if (pct < 0.01) return "<0.01%";
+  return `${pct.toLocaleString(undefined, { maximumFractionDigits: pct >= 10 ? 1 : 2 })}%`;
+};
+
 // Balances the solver holds inside intents.near (its working inventory),
 // refreshed while the page is open.
 function BalancesSection({ solver }: { solver: string }) {
@@ -55,6 +62,12 @@ function BalancesSection({ solver }: { solver: string }) {
               label: "balance",
               value: (r: BalanceRow) => <span className="mono">{fmtBalance(r.balance)}</span>,
               sortVal: (r: BalanceRow) => Number(r.balance),
+            },
+            {
+              key: "share",
+              label: "% of book",
+              value: (r: BalanceRow) => fmtShare(r.value_usd, q.data.total_usd),
+              sortVal: (r: BalanceRow) => r.value_usd ?? 0,
             },
             { key: "price", label: "price", value: (r: BalanceRow) => fmtPrice(r.price_usd), sortVal: (r: BalanceRow) => r.price_usd ?? 0 },
             {
