@@ -116,6 +116,21 @@ func run(log *slog.Logger) error {
 		}
 	}()
 
+	// One-off re-price of legs priced before the spot convention (2026-10-19),
+	// limited to the UI's 30-day reach plus a day of margin. Runs in chunks
+	// after the port binds and is a no-op once its state says done.
+	rp := &enricher.Reprice{
+		Pool: pool, Log: log.With("loop", "reprice"),
+		Key:   "reprice_spot_2026_10_19",
+		Since: time.Date(2026, 9, 18, 0, 0, 0, 0, time.UTC),
+		Chunk: 6 * time.Hour, Pause: 2 * time.Second,
+	}
+	go func() {
+		if err := rp.Run(ctx); err != nil && !errors.Is(err, context.Canceled) {
+			log.Error("reprice backfill stopped", "err", err)
+		}
+	}()
+
 	srv := &api.Server{
 		Pool: pool, Client: client, RPC: nearrpc.New(cfg.NearRPCURL),
 		Registry: registry, Solvers: solvers,

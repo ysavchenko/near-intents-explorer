@@ -31,6 +31,11 @@ func Connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
 
 // Migrate applies embedded migrations in filename order, tracking them in
 // schema_migrations. Each migration runs in its own transaction.
+//
+// Migrations run before the HTTP port binds, so Render's port-scan timeout
+// bounds them: keep them schema-only or small. Bulk data rewrites belong in a
+// chunked background job that starts after the server is listening (see
+// enricher.Reprice; migration 0005 tried a month-wide UPDATE and timed out).
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 	if _, err := pool.Exec(ctx,
 		`CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`); err != nil {
