@@ -14,7 +14,7 @@ export default function LegsSection({ filter, title }: { filter: Record<string, 
   });
 
   const legs = q.data?.rows ?? [];
-  const edges = legs.map((l) => l.edge_bps_hl).filter((e): e is number => e != null);
+  const edges = legs.map((l) => l.edge_bps_binance).filter((e): e is number => e != null);
 
   const amount = (v: string | null) => {
     if (v == null) return "–";
@@ -25,7 +25,7 @@ export default function LegsSection({ filter, title }: { filter: Record<string, 
   return (
     <>
       {edges.length > 5 && (
-        <SectionCard title="Edge distribution (bps vs Hyperliquid, last 500 legs)">
+        <SectionCard title="Edge distribution (bps vs spot, last 500 legs)">
           <div className="px-2 pb-2">
             <EdgeHistogram edges={edges} />
           </div>
@@ -76,7 +76,13 @@ export default function LegsSection({ filter, title }: { filter: Record<string, 
               },
               {
                 key: "edge",
-                label: "edge bps",
+                label: "edge (spot)",
+                value: (l: Leg) => <Bps v={l.edge_bps_binance} />,
+                sortVal: (l: Leg) => l.edge_bps_binance ?? -1e9,
+              },
+              {
+                key: "perp",
+                label: "edge (perp)",
                 value: (l: Leg) => <Bps v={l.edge_bps_hl} />,
                 sortVal: (l: Leg) => l.edge_bps_hl ?? -1e9,
               },

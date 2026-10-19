@@ -9,9 +9,9 @@ swap statistics. One Go binary runs three loops:
    `intents.near` into solver swap legs, and writes them to Postgres. Legs land
    in the DB ~2 s after finality.
 2. **Enricher** — every 30 s prices new legs against venue 1-minute mids
-   (Hyperliquid perps by default, optionally Binance), computes the signed
-   solver edge in bps, and stores USD notionals. Minute mids are cached in the
-   `price_marks` table.
+   (Binance spot as the headline reference, Hyperliquid perps as a secondary
+   perp-relative view), computes the signed solver edge in bps, and stores USD
+   notionals. Minute mids are cached in the `price_marks` table.
 3. **HTTP API + SPA** — JSON API and an embedded React UI (Overview, Pairs,
    Solvers, Bridges, Multi-hop, Status) behind a single basic-auth password.
 
@@ -35,6 +35,16 @@ must reproduce the oracle's legs exactly. Architecture and decisions:
 - **Signed edge**: `edge_bps > 0` always means the solver transacted better
   than the venue mid. Rate convention is quote-per-base with stables (then
   majors) as the quote.
+- **Stables in the mark's currency**: both venue marks are USDT-denominated
+  (Binance `<SYM>USDT` spot; the Hyperliquid perp oracle is a median of
+  USDT-quoted CEX prices), so USDT-family quotes are 1.0 and USDC-family quotes
+  are converted with the Binance `USDCUSDT` minute mid. A USDC leg's fair rate
+  is therefore its own spot price (`ETHUSDT / USDCUSDT` ≈ `ETHUSDC`), and
+  coin/USDT and coin/USDC fills at the same distance from spot get the same
+  edge. The Hyperliquid perp mid sits a few bps under USDT spot (its funding
+  band lets it float toward the USDC-fair price), so `edge_bps_hl` is
+  perp-relative, not spot-relative. Convention in force since 2026-10-19; older
+  rows were not re-priced.
 - Only **successful** settlements produce legs; failures are counted in
   `settlements` with `succeeded=false`. Amounts are stored as exact numerics —
   never floats.
@@ -68,7 +78,7 @@ needed).
 | `BASIC_AUTH_USER` / `BASIC_AUTH_PASS` | `admin` / empty | Auth for API+UI; empty password disables |
 | `NEARDATA_URL` | `https://mainnet.neardata.xyz` | Block server |
 | `NEARDATA_API_KEY` | empty | Optional key (free tier: 180 req/min) |
-| `PRICE_VENUES` | `hl` | `hl`, `binance`, or `hl,binance` (first = primary) |
+| `PRICE_VENUES` | `binance,hl` | `binance` (spot), `hl` (perp), or both; first = headline |
 | `ENRICH_EVERY` | `30s` | Enricher cadence |
 | `TOKENS_URL` | 1Click tokens API | Asset registry source |
 | `TOKENS_REFRESH` | `1h` | Registry refresh cadence |

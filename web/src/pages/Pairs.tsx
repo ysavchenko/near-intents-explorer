@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { apiGet, rangeParams, type AggRow } from "../api";
-import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, Spinner, UsdDelta, useRange } from "../components";
+import { Bps, type Col, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, Spinner, UsdDelta, useRange } from "../components";
 
 export function ParFilter({ par, setPar }: { par: string; setPar: (p: string) => void }) {
   const opts = [
@@ -30,6 +30,37 @@ export function ParFilter({ par, setPar }: { par: string; setPar: (p: string) =>
 export const pairUrl = (pair: string, solver?: string) =>
   `/pair?p=${encodeURIComponent(pair)}` + (solver ? `&solver=${encodeURIComponent(solver)}` : "");
 
+// Edge columns shared by the pair / solver / direction tables. Headline numbers
+// are vs Binance spot in the leg's own quote currency; the Hyperliquid perp mid
+// (USDT-indexed, a few bps under spot) is shown as a secondary view.
+export const edgeCols = (): Col<AggRow>[] => [
+  {
+    key: "fees",
+    label: "fees",
+    value: (r) => <UsdDelta v={r.binance_fees_usd} />,
+    sortVal: (r) => r.binance_fees_usd ?? -1e9,
+  },
+  { key: "priced", label: "priced", value: (r) => fmtNum(r.binance_n), sortVal: (r) => r.binance_n },
+  {
+    key: "vw",
+    label: "vw (spot)",
+    value: (r) => <Bps v={r.binance_vw_edge_bps} />,
+    sortVal: (r) => r.binance_vw_edge_bps ?? -1e9,
+  },
+  {
+    key: "mean",
+    label: "mean (spot)",
+    value: (r) => <Bps v={r.binance_mean_edge_bps} />,
+    sortVal: (r) => r.binance_mean_edge_bps ?? -1e9,
+  },
+  {
+    key: "perp",
+    label: "vw (HL perp)",
+    value: (r) => <Bps v={r.hl_vw_edge_bps} />,
+    sortVal: (r) => r.hl_vw_edge_bps ?? -1e9,
+  },
+];
+
 export const aggTableCols = (linkPair: boolean, solver?: string) => [
   {
     key: "pair",
@@ -47,25 +78,7 @@ export const aggTableCols = (linkPair: boolean, solver?: string) => [
   },
   { key: "n", label: "legs", value: (r: AggRow) => fmtNum(r.n_legs), sortVal: (r: AggRow) => r.n_legs },
   { key: "vol", label: "volume", value: (r: AggRow) => fmtUsd(r.volume_usd), sortVal: (r: AggRow) => r.volume_usd },
-  {
-    key: "fees",
-    label: "fees",
-    value: (r: AggRow) => <UsdDelta v={r.hl_fees_usd} />,
-    sortVal: (r: AggRow) => r.hl_fees_usd ?? -1e9,
-  },
-  { key: "hn", label: "priced", value: (r: AggRow) => fmtNum(r.hl_n), sortVal: (r: AggRow) => r.hl_n },
-  {
-    key: "hvw",
-    label: "vw bps",
-    value: (r: AggRow) => <Bps v={r.hl_vw_edge_bps} />,
-    sortVal: (r: AggRow) => r.hl_vw_edge_bps ?? -1e9,
-  },
-  {
-    key: "hmean",
-    label: "mean bps",
-    value: (r: AggRow) => <Bps v={r.hl_mean_edge_bps} />,
-    sortVal: (r: AggRow) => r.hl_mean_edge_bps ?? -1e9,
-  },
+  ...edgeCols(),
 ];
 
 export default function Pairs() {

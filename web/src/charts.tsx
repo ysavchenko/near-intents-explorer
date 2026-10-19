@@ -45,7 +45,17 @@ export function fillBuckets(rows: TimePoint[], from: string, to: string, bucket:
   const have = new Map(rows.map((r) => [new Date(r.ts).getTime(), r]));
   const out: TimePoint[] = [];
   for (let t = align(fromMs); t <= toMs && out.length < 5000; t += step) {
-    out.push(have.get(t) ?? { ts: new Date(t).toISOString(), volume_usd: 0, n_legs: 0, hl_vw_edge_bps: null, hl_fees_usd: 0 });
+    out.push(
+      have.get(t) ?? {
+        ts: new Date(t).toISOString(),
+        volume_usd: 0,
+        n_legs: 0,
+        binance_vw_edge_bps: null,
+        binance_fees_usd: 0,
+        hl_vw_edge_bps: null,
+        hl_fees_usd: 0,
+      },
+    );
   }
   return out;
 }
@@ -56,8 +66,8 @@ function fmtTick(iso: string, bucket: "hour" | "day"): string {
   return d.toISOString().slice(5, 10);
 }
 
-// Single-series USD bars over time (volume, or HL-mid fees). One series → no
-// legend; the title names it (dataviz rule).
+// Single-series USD bars over time (volume, or spot-relative fees). One series
+// → no legend; the title names it (dataviz rule).
 export function VolumeBars({
   data,
   bucket,
@@ -95,7 +105,7 @@ export function VolumeBars({
           labelFormatter={(v) => new Date(String(v)).toISOString().replace("T", " ").slice(0, 16) + "Z"}
         />
         <Bar
-          dataKey={fees ? "hl_fees_usd" : "volume_usd"}
+          dataKey={fees ? "binance_fees_usd" : "volume_usd"}
           fill={fees ? "var(--series-5)" : "var(--series-1)"}
           radius={[4, 4, 0, 0]}
           maxBarSize={28}
@@ -106,8 +116,8 @@ export function VolumeBars({
   );
 }
 
-// Volume-weighted edge line over time (its own panel — never a second axis on
-// the volume chart).
+// Volume-weighted edge vs spot over time (its own panel — never a second axis
+// on the volume chart).
 export function EdgeLine({
   data,
   bucket,
@@ -142,7 +152,7 @@ export function EdgeLine({
           labelFormatter={(v) => new Date(String(v)).toISOString().replace("T", " ").slice(0, 16) + "Z"}
         />
         <Line
-          dataKey="hl_vw_edge_bps"
+          dataKey="binance_vw_edge_bps"
           stroke="var(--series-5)"
           strokeWidth={2}
           dot={false}

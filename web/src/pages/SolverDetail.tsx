@@ -92,8 +92,8 @@ function BalancesSection({ solver }: { solver: string }) {
 
 type ActivityMetric = "volume" | "fees";
 
-// Segmented volume/fees switch for the activity chart. Fees are HL-mid fees
-// (same series as the solvers table), so a bucket can go negative.
+// Segmented volume/fees switch for the activity chart. Fees are vs spot (same
+// series as the solvers table), so a bucket can go negative.
 function MetricToggle({ metric, setMetric }: { metric: ActivityMetric; setMetric: (m: ActivityMetric) => void }) {
   return (
     <div className="flex overflow-hidden rounded border text-xs" style={{ borderColor: "var(--border)" }}>

@@ -92,9 +92,9 @@ type markKey struct {
 	symbol string // venue spelling (ZECUSDT / ZEC)
 }
 
-// crossMark is the Binance USDCUSDT minute mid (USDT per USDC) — the fair-rate
-// reference for USDT<->USDC par legs. Fetched even when binance is not an
-// enabled venue for regular legs.
+// crossMark is the Binance USDCUSDT minute mid (USDT per USDC): the fair rate
+// for USDT<->USDC par legs and the unit value of USDC on every venue mark (see
+// stableUnit). Fetched even when binance is not an enabled venue.
 var crossMark = markKey{venue: "binance", symbol: "USDCUSDT"}
 
 // Tick prices one batch of pending legs; returns how many rows it examined.
@@ -146,9 +146,9 @@ func (e *Enricher) Tick(ctx context.Context) (int, error) {
 				needed[k][m] = true
 			}
 		}
-		if o.CrossPair {
-			// USDT<->USDC fair rate comes from the Binance cross regardless of
-			// which venues are enabled for regular legs.
+		if o.NeedsCross() {
+			// The cross comes from Binance regardless of which venues are
+			// enabled for regular legs.
 			if needed[crossMark] == nil {
 				needed[crossMark] = map[int64]bool{}
 			}
@@ -162,12 +162,20 @@ func (e *Enricher) Tick(ctx context.Context) (int, error) {
 		return len(legs), err
 	}
 
-	// usd returns (price, known): stables are pinned at 1.0; known=false means
-	// the mark is not yet available (leg stays pending).
+	// usd returns (price, known) in the venue mark's currency (USDT): stables
+	// are 1.0 except the USDC family, which is the live cross; known=false
+	// means a needed mark is not yet available (leg stays pending).
 	usd := func(venue, sym string, m int64) (*float64, bool) {
 		if assets.Stables[sym] {
-			one := 1.0
-			return &one, true
+			var cross *float64
+			if assets.USDCFamily[sym] {
+				p, known := marks[crossMark][m]
+				if !known {
+					return nil, false
+				}
+				cross = p // nil: Binance has no candle this minute — unpriceable
+			}
+			return stableUnit(sym, cross), true
 		}
 		vs := e.venueSpelling(venue, sym)
 		if vs == "" {
@@ -186,7 +194,7 @@ func (e *Enricher) Tick(ctx context.Context) (int, error) {
 		e.Metrics.NoReferenceLegs.Add(1)
 	}
 
-	enriched := 0
+	enriched, usdcCross := 0, 0
 	for _, w := range pending {
 		// Readiness: every needed venue mark must be known (value or null).
 		ready := true
@@ -197,7 +205,7 @@ func (e *Enricher) Tick(ctx context.Context) (int, error) {
 				}
 			}
 		}
-		if w.o.CrossPair {
+		if w.o.NeedsCross() {
 			if _, known := marks[crossMark][w.m]; !known {
 				ready = false
 			}
@@ -281,6 +289,9 @@ func (e *Enricher) Tick(ctx context.Context) (int, error) {
 		} else {
 			e.Metrics.NoReferenceLegs.Add(1)
 		}
+		if !w.o.Par && w.o.NeedsCross() {
+			usdcCross++ // USDC-quoted swap priced through the USDCUSDT cross
+		}
 		enriched++
 	}
 
@@ -289,7 +300,7 @@ func (e *Enricher) Tick(ctx context.Context) (int, error) {
 			return len(legs), fmt.Errorf("apply enrichment: %w", err)
 		}
 	}
-	e.Log.Info("enricher tick", "examined", len(legs), "priced", enriched,
+	e.Log.Info("enricher tick", "examined", len(legs), "priced", enriched, "usdc_cross", usdcCross,
 		"terminal", len(terminal), "still_pending", len(legs)-len(terminal)-enriched)
 	return len(legs), nil
 }

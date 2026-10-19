@@ -13,8 +13,8 @@ import (
 
 // 1-minute reference prices from Binance and Hyperliquid, reduced to a
 // per-minute mid = (high + low) / 2 keyed by minute-open epoch ms (the same
-// proxy the reference pipeline used). Stablecoins are pinned to 1.0 by the
-// caller, never fetched.
+// proxy the reference pipeline used). Both are USDT-denominated marks;
+// stablecoins are never fetched (the caller prices them via stableUnit).
 
 const (
 	binanceURL = "https://data-api.binance.vision/api/v3/klines"

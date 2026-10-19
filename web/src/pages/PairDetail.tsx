@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { apiGet, rangeParams, type AggRow, type DailyPoint } from "../api";
-import { Bps, DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, shortHash, Spinner, UsdDelta, useRange } from "../components";
+import { DataTable, ErrorBox, fmtNum, fmtUsd, SectionCard, shortHash, Spinner, useRange } from "../components";
 import { EdgeLine, fillBuckets, VolumeBars } from "../charts";
 import LegsSection from "./LegsTable";
+import { edgeCols } from "./Pairs";
 
 // Pair detail, optionally scoped to one solver (?solver=) and/or one concrete
 // asset direction (?from=&to=, e.g. USDT@eth -> USDT@tron within USDT/USDT).
@@ -72,25 +73,7 @@ export default function PairDetail() {
     },
     { key: "n", label: "legs", value: (r: AggRow) => fmtNum(r.n_legs), sortVal: (r: AggRow) => r.n_legs },
     { key: "vol", label: "volume", value: (r: AggRow) => fmtUsd(r.volume_usd), sortVal: (r: AggRow) => r.volume_usd },
-    {
-      key: "fees",
-      label: "fees",
-      value: (r: AggRow) => <UsdDelta v={r.hl_fees_usd} />,
-      sortVal: (r: AggRow) => r.hl_fees_usd ?? -1e9,
-    },
-    { key: "hn", label: "priced", value: (r: AggRow) => fmtNum(r.hl_n), sortVal: (r: AggRow) => r.hl_n },
-    {
-      key: "hvw",
-      label: "vw bps",
-      value: (r: AggRow) => <Bps v={r.hl_vw_edge_bps} />,
-      sortVal: (r: AggRow) => r.hl_vw_edge_bps ?? -1e9,
-    },
-    {
-      key: "hmean",
-      label: "mean bps",
-      value: (r: AggRow) => <Bps v={r.hl_mean_edge_bps} />,
-      sortVal: (r: AggRow) => r.hl_mean_edge_bps ?? -1e9,
-    },
+    ...edgeCols(),
   ];
 
   const scopeLabel = activeDir ? `${activeDir.from_label} → ${activeDir.to_label}` : from ? "direction" : "";
@@ -140,7 +123,7 @@ export default function PairDetail() {
               <VolumeBars data={series} bucket={bucket} height={200} />
             </div>
           </SectionCard>
-          <SectionCard title={`VW edge by ${bucket} (bps vs Hyperliquid)`}>
+          <SectionCard title={`VW edge by ${bucket} (bps vs spot)`}>
             <div className="px-2 pb-2">
               <EdgeLine data={series} bucket={bucket} height={200} />
             </div>

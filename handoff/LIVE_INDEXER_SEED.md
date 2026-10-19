@@ -141,8 +141,12 @@ Python oracle. Golden test fixtures with expected outputs are in `fixtures/`.
 
 Same conventions as `reference/enrich.py` + `reference/lib/prices.py`:
 
-- Venues: **Hyperliquid 1m perp candles** (primary — where solvers hedge) and
-  optionally Binance 1m klines. Per-minute mid = `(high+low)/2`. Stables pinned to 1.0.
+- Venues: **Binance 1m spot klines** (headline, since 2026-10-19) and
+  **Hyperliquid 1m perp candles** (secondary, perp-relative — where solvers
+  hedge). Per-minute mid = `(high+low)/2`. Both marks are USDT-denominated:
+  USDT-family stables are 1.0, the USDC family is the Binance `USDCUSDT` minute
+  mid (the perp was measured ~4.5 bps under ETHUSDT and ~6.7 bps over ETHUSDC
+  with its oracle within 1 bps of ETHUSDT, so it is not a USDC price).
 - Rate convention: quote-per-base. `native_rate = quote_amount / base_amount`;
   `venue_rate = venue_usd(base)/venue_usd(quote)` (USD triangulation for
   crypto/crypto pairs).

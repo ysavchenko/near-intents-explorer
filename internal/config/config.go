@@ -31,7 +31,7 @@ type Config struct {
 	StartOverlapBlocks int // resume this many blocks before the stored cursor
 
 	// Enricher.
-	Venues        []string // subset of {"hl", "binance"}; first is primary
+	Venues        []string // subset of {"binance", "hl"}; first is the headline (binance = spot, hl = perp-relative)
 	EnrichEvery   time.Duration
 	TokensURL     string
 	TokensRefresh time.Duration
@@ -54,7 +54,7 @@ func FromEnv() (*Config, error) {
 	if c.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
 	}
-	for _, v := range strings.Split(getenv("PRICE_VENUES", "hl"), ",") {
+	for _, v := range strings.Split(getenv("PRICE_VENUES", "binance,hl"), ",") {
 		v = strings.TrimSpace(strings.ToLower(v))
 		if v == "" {
 			continue
@@ -65,7 +65,7 @@ func FromEnv() (*Config, error) {
 		c.Venues = append(c.Venues, v)
 	}
 	if len(c.Venues) == 0 {
-		c.Venues = []string{"hl"}
+		c.Venues = []string{"binance", "hl"}
 	}
 	return c, nil
 }

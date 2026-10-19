@@ -9,6 +9,14 @@ export type AggRow = {
   to_label?: string;
   n_legs: number;
   volume_usd: number;
+  // Headline edge: Binance spot in the leg's own quote currency (USDC legs are
+  // converted with the USDCUSDT minute mid). hl_* is the Hyperliquid perp mid,
+  // which is USDT-indexed and floats a few bps under spot inside its funding
+  // band — kept as a secondary, perp-relative view.
+  binance_n: number;
+  binance_vw_edge_bps: number | null;
+  binance_mean_edge_bps: number | null;
+  binance_fees_usd: number | null;
   hl_n: number;
   hl_vw_edge_bps: number | null;
   hl_mean_edge_bps: number | null;
@@ -32,6 +40,8 @@ export type Leg = {
   pair: string | null;
   side: string | null;
   native_rate: number | null;
+  binance_rate: number | null;
+  edge_bps_binance: number | null;
   hl_rate: number | null;
   edge_bps_hl: number | null;
   notional_usd: number | null;
@@ -63,6 +73,7 @@ export type Status = {
   uptime_s: number;
   assets: number;
   venues: string[];
+  primary_venue: string;
   solvers_learned: number;
   counters: Record<string, number>;
 };
@@ -116,6 +127,8 @@ export type DailyPoint = {
   key: string;
   n_legs: number;
   volume_usd: number;
+  binance_vw_edge_bps: number | null;
+  binance_fees_usd: number | null;
   hl_vw_edge_bps: number | null;
   hl_fees_usd: number | null;
 };

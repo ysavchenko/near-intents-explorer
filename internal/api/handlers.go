@@ -151,6 +151,15 @@ const aggCols = `
 	avg(edge_bps_hl) AS hl_mean,
 	sum(edge_bps_hl * notional_usd / 1e4) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL) AS hl_fees`
 
+// vwAndFees yields two select expressions for one venue's edge column over
+// legs where both the edge and the notional are known: the volume-weighted
+// edge in bps, and fees = sum(edge_bps * notional / 1e4).
+func vwAndFees(col string) string {
+	filter := fmt.Sprintf("FILTER (WHERE %s IS NOT NULL AND notional_usd IS NOT NULL)", col)
+	return fmt.Sprintf(`sum(%[1]s*notional_usd) %[2]s / NULLIF(sum(notional_usd) %[2]s, 0),
+			sum(%[1]s*notional_usd/1e4) %[2]s`, col, filter)
+}
+
 // runAgg executes an aggregate query grouped by keyCols (column names).
 func (s *Server) runAgg(r *http.Request, f *legFilters, keyCols ...string) ([]map[string]any, error) {
 	keySel := ""
@@ -558,31 +567,25 @@ func (s *Server) handleDaily(w http.ResponseWriter, r *http.Request) {
 	switch group {
 	case "", "none":
 		q = fmt.Sprintf(`SELECT date_trunc('%s', block_ts) AS b, '' AS key, count(*),
-			COALESCE(sum(notional_usd),0),
-			sum(edge_bps_hl*notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL)
-			  / NULLIF(sum(notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL),0),
-			sum(edge_bps_hl*notional_usd/1e4) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL)
-			FROM legs WHERE %s GROUP BY 1 ORDER BY 1`, bucket, f.where())
+			COALESCE(sum(notional_usd),0), %s, %s
+			FROM legs WHERE %s GROUP BY 1 ORDER BY 1`,
+			bucket, vwAndFees("edge_bps_binance"), vwAndFees("edge_bps_hl"), f.where())
 	case "pair", "solver":
 		q = fmt.Sprintf(`SELECT date_trunc('%s', block_ts) AS b, %s AS key, count(*),
-			COALESCE(sum(notional_usd),0),
-			sum(edge_bps_hl*notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL)
-			  / NULLIF(sum(notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL),0),
-			sum(edge_bps_hl*notional_usd/1e4) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL)
-			FROM legs WHERE %s GROUP BY 1, 2 ORDER BY 1, 4 DESC`, bucket, group, f.where())
+			COALESCE(sum(notional_usd),0), %s, %s
+			FROM legs WHERE %s GROUP BY 1, 2 ORDER BY 1, 4 DESC`,
+			bucket, group, vwAndFees("edge_bps_binance"), vwAndFees("edge_bps_hl"), f.where())
 	case "token":
 		// A leg counts toward both of its sides' tokens.
-		q = fmt.Sprintf(`SELECT b, key, count(*), COALESCE(sum(notional_usd),0),
-			sum(edge_bps_hl*notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL)
-			  / NULLIF(sum(notional_usd) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL),0),
-			sum(edge_bps_hl*notional_usd/1e4) FILTER (WHERE edge_bps_hl IS NOT NULL AND notional_usd IS NOT NULL)
+		q = fmt.Sprintf(`SELECT b, key, count(*), COALESCE(sum(notional_usd),0), %[3]s, %[4]s
 			FROM (
-			  SELECT date_trunc('%[1]s', block_ts) AS b, base_symbol AS key, notional_usd, edge_bps_hl
+			  SELECT date_trunc('%[1]s', block_ts) AS b, base_symbol AS key, notional_usd, edge_bps_binance, edge_bps_hl
 			  FROM legs WHERE %[2]s
 			  UNION ALL
-			  SELECT date_trunc('%[1]s', block_ts) AS b, quote_symbol AS key, notional_usd, edge_bps_hl
+			  SELECT date_trunc('%[1]s', block_ts) AS b, quote_symbol AS key, notional_usd, edge_bps_binance, edge_bps_hl
 			  FROM legs WHERE %[2]s
-			) t WHERE key IS NOT NULL GROUP BY 1, 2 ORDER BY 1, 4 DESC`, bucket, f.where())
+			) t WHERE key IS NOT NULL GROUP BY 1, 2 ORDER BY 1, 4 DESC`,
+			bucket, f.where(), vwAndFees("edge_bps_binance"), vwAndFees("edge_bps_hl"))
 		f.args = append(f.args, f.args...) // the WHERE runs twice with the same params
 		// Renumber the second copy's placeholders.
 		q = renumberSecondWhere(q, f)
@@ -598,17 +601,20 @@ func (s *Server) handleDaily(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 	type point struct {
-		Ts        time.Time `json:"ts"`
-		Key       string    `json:"key"`
-		NLegs     int64     `json:"n_legs"`
-		VolumeUSD float64   `json:"volume_usd"`
-		HlVWEdge  *float64  `json:"hl_vw_edge_bps"`
-		HlFeesUSD *float64  `json:"hl_fees_usd"`
+		Ts             time.Time `json:"ts"`
+		Key            string    `json:"key"`
+		NLegs          int64     `json:"n_legs"`
+		VolumeUSD      float64   `json:"volume_usd"`
+		BinanceVWEdge  *float64  `json:"binance_vw_edge_bps"`
+		BinanceFeesUSD *float64  `json:"binance_fees_usd"`
+		HlVWEdge       *float64  `json:"hl_vw_edge_bps"`
+		HlFeesUSD      *float64  `json:"hl_fees_usd"`
 	}
 	out := []point{}
 	for rows.Next() {
 		var p point
-		if err := rows.Scan(&p.Ts, &p.Key, &p.NLegs, &p.VolumeUSD, &p.HlVWEdge, &p.HlFeesUSD); err != nil {
+		if err := rows.Scan(&p.Ts, &p.Key, &p.NLegs, &p.VolumeUSD,
+			&p.BinanceVWEdge, &p.BinanceFeesUSD, &p.HlVWEdge, &p.HlFeesUSD); err != nil {
 			httpErr(w, 500, err)
 			return
 		}
@@ -665,6 +671,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"uptime_s":        int64(time.Since(m.StartedAt).Seconds()),
 		"assets":          s.Registry.Len(),
 		"venues":          s.Cfg.Venues,
+		"primary_venue":   s.Cfg.PrimaryVenue(),
 		"solvers_learned": len(s.Solvers.Learned()),
 		"counters": map[string]int64{
 			"blocks_processed":    m.BlocksProcessed.Load(),

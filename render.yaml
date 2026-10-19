@@ -24,7 +24,7 @@ services:
       - key: NEARDATA_API_KEY
         sync: false
       - key: PRICE_VENUES
-        value: hl
+        value: binance,hl
       - key: PORT
         value: "8080"
 

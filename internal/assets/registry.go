@@ -34,6 +34,10 @@ var Stables = map[string]bool{
 	"USDON": true,
 }
 
+// USDCFamily are the stables worth the live USDC/USDT cross rather than 1.0 on
+// a USDT-denominated venue mark (see enricher.stableUnit).
+var USDCFamily = map[string]bool{"USDC": true}
+
 // BinanceAlias maps a symbol to its reference base symbol when they differ
 // (wrapped/renamed tokens).
 var BinanceAlias = map[string]string{

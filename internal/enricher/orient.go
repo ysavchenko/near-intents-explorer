@@ -98,6 +98,32 @@ func (o *Oriented) CrossRate(usdtPerUsdc float64) float64 {
 	return 1 / usdtPerUsdc // base is USDT, quote is USDC
 }
 
+// NeedsCross reports whether pricing this leg needs the Binance USDCUSDT
+// minute mid: the USDT<->USDC par cross, or a swap with a USDC-family side
+// (venue marks are USDT-denominated, so USDC must be converted — see stableUnit).
+func (o *Oriented) NeedsCross() bool {
+	if o.CrossPair {
+		return true
+	}
+	return !o.Par && (assets.USDCFamily[o.Base] || assets.USDCFamily[o.Quote])
+}
+
+// stableUnit is the value of one unit of a stable in the venue mark's currency.
+// Both venue marks are USDT-denominated: Binance <SYM>USDT spot by
+// construction, and the Hyperliquid perp because its oracle is a median of
+// USDT-quoted CEX prices (measured within 1 bps of Binance ETHUSDT on
+// 2026-10-19 while USDCUSDT traded at +9..+11 bps). So the USDC family is
+// worth the live USDCUSDT cross — nil when Binance has no candle for the
+// minute, which makes the leg unpriceable rather than silently par — and every
+// other stable is pinned to 1.0 (USDT par).
+func stableUnit(sym string, cross *float64) *float64 {
+	if assets.USDCFamily[sym] {
+		return cross
+	}
+	one := 1.0
+	return &one
+}
+
 // legInput is the slice of a legs row that orientation needs.
 type legInput struct {
 	LegClass  string

@@ -53,14 +53,14 @@ export default function Overview() {
     {
       key: "fees",
       label: "fees",
-      value: (r: AggRow) => <UsdDelta v={r.hl_fees_usd} />,
-      sortVal: (r: AggRow) => r.hl_fees_usd ?? -1e9,
+      value: (r: AggRow) => <UsdDelta v={r.binance_fees_usd} />,
+      sortVal: (r: AggRow) => r.binance_fees_usd ?? -1e9,
     },
     {
       key: "vw",
-      label: "vw edge",
-      value: (r: AggRow) => <Bps v={r.hl_vw_edge_bps} />,
-      sortVal: (r: AggRow) => r.hl_vw_edge_bps ?? -1e9,
+      label: "vw (spot)",
+      value: (r: AggRow) => <Bps v={r.binance_vw_edge_bps} />,
+      sortVal: (r: AggRow) => r.binance_vw_edge_bps ?? -1e9,
     },
   ];
 

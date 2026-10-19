@@ -260,3 +260,76 @@ func TestOrientLegTerminal(t *testing.T) {
 		t.Error("missing amounts must be terminal")
 	}
 }
+
+// Venue marks are USDT-denominated, so a USDC-quoted swap must be benchmarked
+// through the USDCUSDT cross. Real rows from 2026-10-19 15:14 UTC (solver
+// 6af11753…): both legs were quoted ~4 bps under spot in their own quote
+// currency, yet the old 1.0 convention called the USDC leg +10.6 bps and the
+// USDT leg −0.7 bps. Acceptance: same solver, same minute, same distance from
+// spot ⇒ same edge within 2 bps (the residual is the solver's own cross).
+func TestUSDCQuoteUsesCross(t *testing.T) {
+	cross := 1.00097   // Binance USDCUSDT minute mid
+	ethUSDT := 2409.62 // Binance ETHUSDT minute mid
+	hlMid := 2408.55   // Hyperliquid ETH perp mid (USDT-indexed)
+
+	if v := stableUnit("USDT", &cross); v == nil || *v != 1 {
+		t.Errorf("USDT unit: %v", v)
+	}
+	if v := stableUnit("DAI", &cross); v == nil || *v != 1 {
+		t.Errorf("other stables stay at par: %v", v)
+	}
+	if v := stableUnit("USDC", &cross); v == nil || *v != cross {
+		t.Errorf("USDC unit must be the cross: %v", v)
+	}
+	if v := stableUnit("USDC", nil); v != nil {
+		t.Errorf("USDC with no cross candle must be unpriceable, got %v", v)
+	}
+
+	// ETH/USDT buy_base: solver paid 240.871 USDT for 0.1 ETH.
+	usdtNative := 240.871 / 0.1
+	usdtEdge := Edge(usdtNative, &ethUSDT, "buy_base")
+	// ETH/USDC buy_base: solver paid 2406.00 USDC per ETH.
+	usdcRate := ethUSDT / *stableUnit("USDC", &cross)
+	usdcEdge := Edge(2406.00, &usdcRate, "buy_base")
+	if usdtEdge == nil || usdcEdge == nil {
+		t.Fatalf("edges: %v %v", usdtEdge, usdcEdge)
+	}
+	if math.Abs(*usdtEdge-3.80) > 0.05 || math.Abs(*usdcEdge-5.34) > 0.05 {
+		t.Errorf("spot edges: usdt %.2f (want 3.80) usdc %.2f (want 5.34)", *usdtEdge, *usdcEdge)
+	}
+	if d := math.Abs(*usdtEdge - *usdcEdge); d > 2 {
+		t.Errorf("USDT and USDC legs must agree within 2 bps, differ by %.2f", d)
+	}
+	// Old convention (USDC pinned at 1.0 against the perp mid) split them by ~11 bps.
+	oldUSDC := Edge(2406.00, &hlMid, "buy_base")
+	oldUSDT := Edge(usdtNative, &hlMid, "buy_base")
+	if d := *oldUSDC - *oldUSDT; d < 9 {
+		t.Errorf("sanity: old convention gap should be ~11 bps, got %.2f", d)
+	}
+}
+
+func TestNeedsCross(t *testing.T) {
+	reg := testRegistry(t)
+	// USDC-quoted swap needs the cross; USDT-quoted does not.
+	o, _ := orientLeg(reg, legInput{LegClass: "interesting", FromAsset: ltc, ToAsset: usdcEth,
+		AmountIn: dec("1"), AmountOut: dec("40")})
+	if !o.NeedsCross() {
+		t.Errorf("LTC/USDC must need the cross: %+v", o)
+	}
+	o, _ = orientLeg(reg, legInput{LegClass: "interesting", FromAsset: ltc, ToAsset: usdtEth,
+		AmountIn: dec("1"), AmountOut: dec("40")})
+	if o.NeedsCross() {
+		t.Errorf("LTC/USDT must not need the cross: %+v", o)
+	}
+	// Par legs: only the USDT<->USDC cross pair does.
+	o, _ = orientLeg(reg, legInput{LegClass: "stable_stable", FromAsset: usdcEth, ToAsset: usdtEth,
+		AmountIn: dec("1"), AmountOut: dec("1")})
+	if !o.NeedsCross() {
+		t.Error("USDT<->USDC par leg must need the cross")
+	}
+	o, _ = orientLeg(reg, legInput{LegClass: "stable_stable", FromAsset: usdcEth, ToAsset: daiEth,
+		AmountIn: dec("1"), AmountOut: dec("1")})
+	if o.NeedsCross() {
+		t.Error("USDC<->DAI par leg is pinned at 1.0, no cross")
+	}
+}
