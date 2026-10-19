@@ -97,7 +97,10 @@ type markKey struct {
 // stableUnit). Fetched even when binance is not an enabled venue.
 var crossMark = markKey{venue: "binance", symbol: "USDCUSDT"}
 
-// Tick prices one batch of pending legs; returns how many rows it examined.
+// Tick prices one batch of pending legs, newest first; returns how many rows
+// it examined. In steady state only the last ~90 s is pending, so order is
+// moot; when a migration resets history for re-pricing, newest-first keeps
+// live legs from queueing behind the backlog and fills recent windows first.
 func (e *Enricher) Tick(ctx context.Context) (int, error) {
 	e.init()
 	cutoff := e.now().UTC().Add(-minLegAge)
@@ -105,7 +108,7 @@ func (e *Enricher) Tick(ctx context.Context) (int, error) {
 		SELECT id, block_ts, leg_class, from_asset, to_asset, amount_in::text, amount_out::text
 		FROM legs
 		WHERE price_status = 'pending' AND block_ts < $1
-		ORDER BY block_ts
+		ORDER BY block_ts DESC
 		LIMIT $2`, cutoff, batchSize)
 	if err != nil {
 		return 0, err
